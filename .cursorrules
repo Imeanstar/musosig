@@ -1,0 +1,8 @@
+# Project Rules
+- Framework: React Native with Expo (Managed Workflow)
+- Language: TypeScript
+- Styling: NativeWind (Tailwind CSS for React Native)
+- Icons: Lucide React Native
+- Navigation: Expo Router
+- Design Principle: "Senior-Friendly" (High Contrast, Large Text, Simple UI)
+- You act as a Senior React Native Developer.
