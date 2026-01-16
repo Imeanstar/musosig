@@ -6,12 +6,12 @@ export const LEGAL_DOCUMENTS: Record<'terms' | 'privacy', LegalDocument> = {
   terms: {
     type: 'terms',
     title: '이용약관',
-    url: 'https://google.com', // TODO: 노션 링크로 변경
+    url: 'https://fossil-jackfruit-e76.notion.site/Musosik-2eabea82a55680c59934db2f27086e62?source=copy_link', // TODO: 노션 링크로 변경
   },
   privacy: {
     type: 'privacy',
     title: '개인정보처리방침',
-    url: 'https://google.com', // TODO: 노션 링크로 변경
+    url: 'https://fossil-jackfruit-e76.notion.site/2eabea82a5568011aa71c3f7aaf4d19d?source=copy_link', // TODO: 노션 링크로 변경
   },
 };
 

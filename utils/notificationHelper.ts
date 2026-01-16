@@ -30,6 +30,12 @@ export const registerForPushNotificationsAsync = async (): Promise<string | null
       return null;
     }
 
+    // ✅ [수정] 웹(Web) 환경이면 그냥 조용히 종료 (에러 방지)
+    if (Platform.OS === 'web') {
+      console.log('🌐 웹 환경에서는 푸시 알림 등록을 건너뜁니다.');
+      return null;
+    }
+
     // 2. Android용 알림 채널 설정
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('default', {

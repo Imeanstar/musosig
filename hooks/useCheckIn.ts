@@ -12,10 +12,14 @@ export const useCheckIn = (userId: string | null) => {
    * 로직: users 테이블의 last_seen_at이 '오늘 0시' 이후인지 확인
    */
   const checkTodayCheckIn = async (): Promise<void> => {
-    if (!userId) return;
+    // 🛡️ 1. userId 없으면 명확히 false로 설정
+    if (!userId) {
+      setIsChecked(false);
+      return;
+    }
 
     try {
-      // 1. 최신 유저 정보 가져오기
+      // 최신 유저 정보 가져오기
       const { data, error } = await supabase
         .from('users')
         .select('last_seen_at')
@@ -24,20 +28,36 @@ export const useCheckIn = (userId: string | null) => {
 
       if (error) throw error;
 
-      if (data && data.last_seen_at) {
-        const lastSeen = new Date(data.last_seen_at);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0); // 오늘 0시 0분 0초
+      // 🛡️ 2. data가 없는 경우 명시적 처리
+      if (!data) {
+        console.warn('⚠️ 사용자 데이터를 찾을 수 없습니다.');
+        setIsChecked(false);
+        return;
+      }
 
-        // 마지막 접속 시간이 오늘 0시보다 뒤면 -> 출석한 것!
-        if (lastSeen >= today) {
-          setIsChecked(true);
-        } else {
-          setIsChecked(false);
-        }
+      // 🛡️ 3. last_seen_at이 null인 경우 명시적 처리 (신규 가입자)
+      if (!data.last_seen_at) {
+        console.log('ℹ️ 아직 출석한 적이 없습니다. (신규 가입자)');
+        setIsChecked(false);
+        return;
+      }
+
+      // 🛡️ 4. 정상 케이스: 날짜 비교
+      const lastSeen = new Date(data.last_seen_at);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // 오늘 0시 0분 0초
+
+      if (lastSeen >= today) {
+        console.log('✅ 오늘 이미 출석했습니다.');
+        setIsChecked(true);
+      } else {
+        console.log('❌ 아직 출석하지 않았습니다.');
+        setIsChecked(false);
       }
     } catch (error) {
-      console.error('출석 확인 중 오류:', error);
+      console.error('❌ 출석 확인 중 오류:', error);
+      // 🛡️ 5. 에러 발생 시 안전한 기본값 제공
+      setIsChecked(false);
     }
   };
 

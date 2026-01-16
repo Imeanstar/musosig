@@ -1,6 +1,6 @@
 // app/index.tsx - 노인 생존 신고 앱 (리팩토링됨)
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, Alert, Linking } from 'react-native';
 import { Settings, Crown } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { styles } from './styles';
@@ -40,7 +40,6 @@ export default function Index() {
   const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showMathModal, setShowMathModal] = useState(false);
-  const [showLegalModal, setShowLegalModal] = useState(false);
 
   // 수학 문제 상태
   const [mathProblem, setMathProblem] = useState<MathProblem>({ num1: 0, num2: 0, answer: 0 });
@@ -152,9 +151,16 @@ export default function Index() {
   /**
    * 법률 문서 열기
    */
-  const handleOpenLegal = (type: LegalDocType): void => {
-    setLegalDoc(LEGAL_DOCUMENTS[type]);
-    setShowLegalModal(true);
+  // 기존 handleOpenLegal 함수를 지우고 이걸로 바꾸세요
+  const handleOpenLegal = async (type: LegalDocType): Promise<void> => {
+    const url = LEGAL_DOCUMENTS[type].url;
+
+    try {
+      // 시스템 브라우저(크롬/사파리)로 깔끔하게 열기
+      await Linking.openURL(url);
+    } catch (error) {
+      Alert.alert('오류', '링크를 열 수 없습니다.');
+    }
   };
 
   /**
@@ -211,12 +217,6 @@ export default function Index() {
         />
       )}
 
-      <LegalModal
-        visible={showLegalModal}
-        onClose={() => setShowLegalModal(false)}
-        url={legalDoc.url}
-        title={legalDoc.title}
-      />
 
       {/* 메인 화면 */}
       <View style={styles.header}>

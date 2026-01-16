@@ -86,83 +86,95 @@ export const useUserManagement = () => {
     }
   };
 
-  /**
-   * 회원가입/로그인 (기존 유지하되, 리턴값 최적화)
+/**
+   * 회원가입/로그인 (TypeScript 에러 수정 버전)
    */
-  const registerOrLogin = async (name: string, phone: string): Promise<boolean> => {
-    if (!name.trim() || !phone.trim()) {
-      Alert.alert('입력 오류', '이름과 전화번호를 입력해주세요.');
-      return false;
+const registerOrLogin = async (name: string, phone: string): Promise<boolean> => {
+  if (!name.trim() || !phone.trim()) {
+    Alert.alert('입력 오류', '이름과 전화번호를 입력해주세요.');
+    return false;
+  }
+
+  setIsLoading(true);
+
+  try {
+    // 1. 가짜 이메일/비번 생성
+    const email = `${phone.trim()}@musosik.app`;
+    const password = `musosik${phone.trim()}`;
+
+    // 2. 로그인 시도
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    // 최종적으로 사용할 세션과 유저 정보를 담을 변수
+    let session = signInData.session;
+    let user = signInData.user;
+
+    // 3. 로그인 실패 시 -> 회원가입 시도
+    if (signInError) {
+      console.log('로그인 실패, 신규 가입 시도...');
+      
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+
+      if (signUpError) throw signUpError;
+
+      // 회원가입 성공 시, 세션과 유저 정보를 갱신
+      session = signUpData.session;
+      user = signUpData.user;
     }
 
-    setIsLoading(true);
-
-    try {
-      // 전화번호로 조회
-      const { data: existingUsers, error: selectError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('phone', phone.trim())
-        .maybeSingle(); // limit(1) 대신 maybeSingle 사용 권장
-
-      if (selectError) throw selectError;
-
-      let userData;
-      let isNewUser = false;
-
-      if (existingUsers) {
-        // 기존 유저 -> 로그인
-        userData = existingUsers;
-        // 이름이 바뀌었으면 업데이트
-        if (userData.name !== name.trim()) {
-          await supabase.from('users').update({ name: name.trim() }).eq('id', userData.id);
-          userData.name = name.trim();
-        }
-      } else {
-        // 신규 유저 -> 회원가입
-        const { data: newUser, error: insertError } = await supabase
-          .from('users')
-          .insert({
-            name: name.trim(),
-            phone: phone.trim(),
-            emergency_contacts: [],
-          })
-          .select()
-          .single();
-
-        if (insertError) throw insertError;
-        userData = newUser;
-        isNewUser = true;
-      }
-
-      // 앱 내에서 사용할 형태로 변환
-      const userToSave: UserInfo = {
-        user_id: userData.id,
-        name: userData.name,
-        phone: userData.phone,
-        emergency_contacts: userData.emergency_contacts || [],
-        is_premium: userData.is_premium || false,
-        push_token: userData.push_token || null,
-      };
-
-      await saveUserToStorage(userToSave);
-      setUserInfo(userToSave);
-      await registerPushToken(userToSave);
-
-      Alert.alert(
-        isNewUser ? '환영합니다!' : '반갑습니다!', 
-        `${userData.name}님, 오늘도 안녕하신가요?`
-      );
-
-      return true;
-    } catch (error) {
-      console.error('등록 에러:', error);
-      Alert.alert('오류', '로그인/회원가입에 실패했습니다.');
-      return false;
-    } finally {
-      setIsLoading(false);
+    // 4. 세션 확인 (로그인도 가입도 다 통과했는데 세션이 없으면 에러)
+    if (!session || !user) {
+      throw new Error('로그인 세션을 생성할 수 없습니다.');
     }
-  };
+
+    const userId = user.id;
+
+    // 5. DB에 정보 저장 (Upsert) - RLS 통과!
+    const { data: userData, error: dbError } = await supabase
+      .from('users')
+      .upsert({
+        id: userId,
+        name: name.trim(),
+        phone: phone.trim(),
+        last_seen_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
+
+    if (dbError) throw dbError;
+
+    // 6. 앱 내 상태 업데이트
+    const userToSave: UserInfo = {
+      user_id: userData.id,
+      name: userData.name,
+      phone: userData.phone,
+      emergency_contacts: userData.emergency_contacts || [],
+      is_premium: userData.is_premium || false,
+      push_token: userData.push_token || null,
+    };
+
+    await saveUserToStorage(userToSave);
+    setUserInfo(userToSave);
+    
+    await registerPushToken(userToSave);
+
+    Alert.alert('반갑습니다!', `${userData.name}님, 오늘도 안녕하신가요?`);
+    return true;
+
+  } catch (error) {
+    console.error('인증 처리 에러:', error);
+    Alert.alert('오류', '로그인 처리에 실패했습니다. 잠시 후 다시 시도해주세요.');
+    return false;
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   // ... (togglePremium, resetAllData는 기존 코드와 동일하여 생략 가능하지만, 필요시 그대로 유지)
   const togglePremium = async (): Promise<void> => {
