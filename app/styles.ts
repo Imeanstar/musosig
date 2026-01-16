@@ -37,5 +37,27 @@ export const styles = StyleSheet.create({
   saveButton: { backgroundColor: '#3b82f6' },
   saveButtonText: { color: 'white', fontWeight: 'bold' },
   resetButton: { padding: 12, alignItems: 'center', marginTop: 10 },
-  resetButtonText: { color: '#ef4444', fontWeight: 'bold' }
+  resetButtonText: { color: '#ef4444', fontWeight: 'bold' },
+  
+  // Premium 관련 스타일
+  premiumBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fef3c7', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, marginTop: 8 },
+  premiumBadgeText: { fontSize: 14, fontWeight: 'bold', color: '#92400e', marginLeft: 6 },
+  
+  // 수학 문제 모달 스타일
+  mathModalContainer: { backgroundColor: 'white', padding: 32, borderRadius: 20, width: '90%', alignItems: 'center' },
+  mathModalTitle: { fontSize: 24, fontWeight: 'bold', marginBottom: 8, color: '#1f2937' },
+  mathModalSubtitle: { fontSize: 16, color: '#6b7280', marginBottom: 24, textAlign: 'center' },
+  mathProblem: { fontSize: 48, fontWeight: 'bold', color: '#3b82f6', marginBottom: 24 },
+  mathInput: { borderWidth: 2, borderColor: '#3b82f6', borderRadius: 12, padding: 16, fontSize: 32, width: '100%', textAlign: 'center', marginBottom: 20, fontWeight: 'bold' },
+  mathSubmitButton: { backgroundColor: '#3b82f6', padding: 18, borderRadius: 12, width: '100%', alignItems: 'center' },
+  mathSubmitButtonText: { color: 'white', fontSize: 20, fontWeight: 'bold' },
+  
+  // Premium 테스트 스위치
+  premiumTestRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, backgroundColor: '#fef3c7', borderRadius: 12, marginBottom: 16 },
+  premiumTestLabel: { fontSize: 16, fontWeight: 'bold', color: '#92400e' },
+  
+  // 법률 문서 메뉴 스타일
+  legalMenuSection: { marginBottom: 16, borderTopWidth: 1, borderTopColor: '#e5e7eb', paddingTop: 16 },
+  legalMenuItem: { flexDirection: 'row', alignItems: 'center', padding: 14, backgroundColor: '#f9fafb', borderRadius: 10, marginBottom: 10 },
+  legalMenuText: { fontSize: 16, color: '#374151', marginLeft: 12, fontWeight: '500' }
 });
