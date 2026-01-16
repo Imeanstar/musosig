@@ -1,117 +1,65 @@
-// 48시간 동안 생존신고가 없는 위험군 사용자를 찾는 Supabase Edge Function
-// Setup type definitions for built-in Supabase Runtime APIs
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
+// supabase/functions/check-48h-inactivity/index.ts
 
-console.log("🔍 48시간 미활동 사용자 체크 시작");
+import { createClient } from 'jsr:@supabase/supabase-js@2'
 
 Deno.serve(async (req) => {
   try {
-    // 1. Supabase 클라이언트 생성 (SERVICE_ROLE_KEY 사용)
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
 
-    if (!supabaseUrl || !supabaseServiceRoleKey) {
-      console.error("❌ 환경 변수 누락: SUPABASE_URL 또는 SUPABASE_SERVICE_ROLE_KEY");
-      return new Response(
-        JSON.stringify({ error: "서버 설정 오류" }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
-      );
+    // 💡 변경점 1: 24시간(하루) 전 시간 계산
+    const timeLimit = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+    // 24시간 미활동 + 토큰이 있는 유저 찾기
+    const { data: missingUsers, error } = await supabaseAdmin
+      .from('users')
+      .select('id, push_token, name')
+      .lt('last_seen_at', timeLimit) // 24시간 지났는지 확인
+      .not('push_token', 'is', null)
+
+    if (error) throw error
+
+    console.log(`🔍 24시간 미접속자 발견: ${missingUsers.length}명`)
+
+    if (!missingUsers || missingUsers.length === 0) {
+      return new Response(JSON.stringify({ message: '보낼 알림 없음' }), {
+        headers: { 'Content-Type': 'application/json' },
+      })
     }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
+    // 💡 변경점 2: 메시지를 '경고'보다는 '안부 확인' 느낌으로 변경
+    const notifications = missingUsers.map((user) => ({
+      to: user.push_token,
+      sound: 'default',
+      title: '무소식 안부 확인 👋',
+      body: `${user.name}님, 24시간 이내 앱 접속이 없으셨네요. 별일 없으신가요? (앱을 켜서 출석을 해주세요)`,
+      data: { screen: 'check-in' },
+    }))
 
-    // 2. 48시간 전 타임스탬프 계산
-    const now = new Date();
-    const fortyEightHoursAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000);
-    const cutoffTime = fortyEightHoursAgo.toISOString();
+    // Expo로 발송
+    const response = await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(notifications),
+    })
 
-    console.log(`⏰ 현재 시간 (UTC): ${now.toISOString()}`);
-    console.log(`⏰ 48시간 전 기준: ${cutoffTime}`);
+    const result = await response.json()
+    console.log('✅ 알림 전송 결과:', result)
 
-    // 3. DB 조회: last_seen_at이 48시간 전보다 과거이고 null이 아닌 사용자
-    const { data: missingUsers, error } = await supabase
-      .from("users")
-      .select("id, name, phone, emergency_contacts, last_seen_at")
-      .lt("last_seen_at", cutoffTime)
-      .not("last_seen_at", "is", null);
-
-    if (error) {
-      console.error("❌ DB 조회 실패:", error);
-      return new Response(
-        JSON.stringify({ error: "데이터베이스 조회 실패", details: error.message }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
-      );
-    }
-
-    // 4. 결과 처리 및 로그 출력
-    const missingCount = missingUsers?.length || 0;
-    
-    console.log(`\n📊 위험군 사용자 수: ${missingCount}명\n`);
-
-    if (missingCount > 0) {
-      console.log("⚠️ ===== 48시간 미활동 위험군 사용자 목록 =====");
-      missingUsers?.forEach((user, index) => {
-        console.log(`\n[${index + 1}] ${user.name} (${user.phone})`);
-        console.log(`   마지막 활동: ${user.last_seen_at}`);
-        console.log(`   비상연락망: ${user.emergency_contacts?.length || 0}명`);
-        if (user.emergency_contacts && user.emergency_contacts.length > 0) {
-          user.emergency_contacts.forEach((contact: string, i: number) => {
-            console.log(`      ${i + 1}. ${contact}`);
-          });
-        } else {
-          console.log(`      ⚠️ 비상연락망 없음`);
-        }
-      });
-      console.log("\n================================================\n");
-    } else {
-      console.log("✅ 현재 위험군 사용자 없음 (모두 48시간 이내 활동)\n");
-    }
-
-    // 5. JSON 응답 반환
     return new Response(
-      JSON.stringify({
-        missing_count: missingCount,
-        message: missingCount > 0
-          ? `${missingCount}명의 위험군 사용자가 발견되었습니다.`
-          : "모든 사용자가 안전합니다.",
-        checked_at: now.toISOString(),
-        cutoff_time: cutoffTime,
-        users: missingUsers || [],
-      }),
-      { 
-        status: 200, 
-        headers: { "Content-Type": "application/json" } 
-      }
-    );
+      JSON.stringify({ success: true, sent_count: missingUsers.length, details: result }),
+      { headers: { 'Content-Type': 'application/json' } }
+    )
 
-  } catch (error) {
-    console.error("❌ 예상치 못한 오류:", error);
-    return new Response(
-      JSON.stringify({ 
-        error: "서버 오류", 
-        details: error instanceof Error ? error.message : String(error) 
-      }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
-    );
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
-});
-
-/* 로컬 테스트 방법:
-
-  1. Supabase 로컬 환경 시작:
-     supabase start
-
-  2. HTTP 요청:
-     curl -i --location --request POST 'http://127.0.0.1:54321/functions/v1/check-48h-inactivity' \
-       --header 'Authorization: Bearer [YOUR_ANON_KEY]' \
-       --header 'Content-Type: application/json'
-
-  3. 배포:
-     supabase functions deploy check-48h-inactivity
-
-  4. Cron으로 자동 실행 (매일 오전 9시):
-     Supabase Dashboard > Database > Cron Jobs에서 설정
-     또는 GitHub Actions 등에서 주기적으로 호출
-
-*/
+})
