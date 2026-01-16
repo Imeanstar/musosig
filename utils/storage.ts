@@ -12,6 +12,9 @@ export const saveUserToStorage = async (user: UserInfo): Promise<void> => {
   await AsyncStorage.setItem(STORAGE_KEYS.USER_PHONE, user.phone);
   await AsyncStorage.setItem(STORAGE_KEYS.EMERGENCY_CONTACTS, JSON.stringify(user.emergency_contacts));
   await AsyncStorage.setItem(STORAGE_KEYS.IS_PREMIUM, String(user.is_premium));
+  if (user.push_token) {
+    await AsyncStorage.setItem(STORAGE_KEYS.PUSH_TOKEN, user.push_token);
+  }
 };
 
 /**
@@ -26,6 +29,7 @@ export const loadUserFromStorage = async (): Promise<UserInfo | null> => {
   const phone = await AsyncStorage.getItem(STORAGE_KEYS.USER_PHONE);
   const contactsStr = await AsyncStorage.getItem(STORAGE_KEYS.EMERGENCY_CONTACTS);
   const isPremiumStr = await AsyncStorage.getItem(STORAGE_KEYS.IS_PREMIUM);
+  const pushToken = await AsyncStorage.getItem(STORAGE_KEYS.PUSH_TOKEN);
 
   return {
     user_id: userId,
@@ -33,6 +37,7 @@ export const loadUserFromStorage = async (): Promise<UserInfo | null> => {
     phone: phone || '',
     emergency_contacts: contactsStr ? JSON.parse(contactsStr) : [],
     is_premium: isPremiumStr === 'true',
+    push_token: pushToken,
   };
 };
 

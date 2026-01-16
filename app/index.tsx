@@ -10,10 +10,14 @@ import { useUserManagement } from '../hooks/useUserManagement';
 import { useCheckIn } from '../hooks/useCheckIn';
 import { saveEmergencyContacts } from '../utils/storage';
 import { getLocaleDateString } from '../utils/date';
+import { setupNotificationHandler } from '../utils/notificationHelper';
 import { RegisterModal } from '../components/modals/RegisterModal';
 import { MathChallengeModal } from '../components/modals/MathChallengeModal';
 import { SettingsModal } from '../components/modals/SettingsModal';
 import { LegalModal } from '../components/LegalModal';
+
+// 푸시 알림 핸들러 설정 (앱이 켜져있을 때도 알림 표시)
+setupNotificationHandler();
 
 export default function Index() {
   // 커스텀 훅

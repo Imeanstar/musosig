@@ -4,7 +4,9 @@ import { Alert } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { UserInfo } from '../types';
 import { saveUserToStorage, loadUserFromStorage, clearAllStorage, savePremiumStatus } from '../utils/storage';
-import { MESSAGES } from '../constants';
+import { MESSAGES, STORAGE_KEYS } from '../constants';
+import { registerForPushNotificationsAsync } from '../utils/notificationHelper';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const useUserManagement = () => {
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
@@ -18,11 +20,52 @@ export const useUserManagement = () => {
       const user = await loadUserFromStorage();
       if (user) {
         setUserInfo(user);
+        // 로그인된 유저가 있으면 푸시 토큰 등록
+        await registerPushToken(user);
       }
       return user;
     } catch (error) {
       console.error('사용자 정보 불러오기 실패:', error);
       return null;
+    }
+  };
+
+  /**
+   * 푸시 토큰 등록 및 업데이트
+   */
+  const registerPushToken = async (user: UserInfo): Promise<void> => {
+    try {
+      const newToken = await registerForPushNotificationsAsync();
+      
+      if (!newToken) {
+        console.log('푸시 토큰 발급 실패 (권한 거부 또는 에뮬레이터)');
+        return;
+      }
+
+      // DB에 저장된 토큰과 다르면 업데이트
+      if (newToken !== user.push_token) {
+        console.log('🔔 새로운 푸시 토큰 발견, DB 업데이트 중...');
+        
+        const { error } = await supabase
+          .from('users')
+          .update({ push_token: newToken })
+          .eq('id', user.user_id);
+
+        if (error) {
+          console.error('푸시 토큰 DB 업데이트 실패:', error);
+          return;
+        }
+
+        // 로컬 상태 및 스토리지 업데이트
+        await AsyncStorage.setItem(STORAGE_KEYS.PUSH_TOKEN, newToken);
+        setUserInfo({ ...user, push_token: newToken });
+        
+        console.log('✅ 푸시 토큰 업데이트 완료');
+      } else {
+        console.log('✅ 푸시 토큰이 이미 최신 상태입니다.');
+      }
+    } catch (error) {
+      console.error('푸시 토큰 등록 중 오류:', error);
     }
   };
 
@@ -88,10 +131,14 @@ export const useUserManagement = () => {
         phone: userData.phone,
         emergency_contacts: userData.emergency_contacts || [],
         is_premium: userData.is_premium || false,
+        push_token: userData.push_token || null,
       };
 
       await saveUserToStorage(userToSave);
       setUserInfo(userToSave);
+
+      // 회원가입/로그인 직후 푸시 토큰 등록
+      await registerPushToken(userToSave);
 
       const message = isNewUser ? MESSAGES.REGISTER_SUCCESS_NEW : MESSAGES.REGISTER_SUCCESS_EXISTING;
       Alert.alert(message, `${userData.name}님, 시작합니다.`);

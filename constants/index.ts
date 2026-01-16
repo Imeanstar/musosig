@@ -64,4 +64,5 @@ export const STORAGE_KEYS = {
   USER_PHONE: 'user_phone',
   EMERGENCY_CONTACTS: 'emergency_contacts',
   IS_PREMIUM: 'is_premium',
+  PUSH_TOKEN: 'push_token',
 } as const;

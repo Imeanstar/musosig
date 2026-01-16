@@ -5,6 +5,7 @@ export interface UserInfo {
   phone: string;
   emergency_contacts: string[];
   is_premium: boolean;
+  push_token?: string | null;
 }
 
 export interface MathProblem {
