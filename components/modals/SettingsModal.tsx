@@ -1,6 +1,6 @@
-// components/modals/SettingsModal.tsx - 설정 모달 컴포넌트
+// components/modals/SettingsModal.tsx
 import React, { useState } from 'react';
-import { Modal, View, Text, TextInput, TouchableOpacity, ScrollView, Alert, Switch } from 'react-native';
+import { Modal, View, Text, TextInput, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { FileText, Lock } from 'lucide-react-native';
 import { styles } from '../../app/styles';
 import { UserInfo, LegalDocType } from '../../types';
@@ -11,7 +11,7 @@ interface SettingsModalProps {
   onClose: () => void;
   userInfo: UserInfo;
   onSaveContacts: (contacts: string[]) => Promise<void>;
-  onTogglePremium: () => void;
+  // 🗑️ onTogglePremium 삭제됨
   onOpenLegal: (type: LegalDocType) => void;
   onReset: () => void;
 }
@@ -21,11 +21,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose,
   userInfo,
   onSaveContacts,
-  onTogglePremium,
+  // 🗑️ onTogglePremium 삭제됨
   onOpenLegal,
   onReset,
 }) => {
-  const [emergencyContacts, setEmergencyContacts] = useState<string[]>(userInfo.emergency_contacts);
+  // 뒤에 || [] 를 붙여서, null이면 빈 배열로 바꿔줍니다.
+const [emergencyContacts, setEmergencyContacts] = useState<string[]>(userInfo.emergency_contacts || []);
   const [newContact, setNewContact] = useState('');
   const [resetStep, setResetStep] = useState(0); // 0: 일반, 1: 초기화 확인
 
@@ -50,7 +51,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   const handleClose = () => {
-    // 닫을 때 상태 초기화
     setEmergencyContacts(userInfo.emergency_contacts);
     setResetStep(0);
     onClose();
@@ -65,22 +65,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <>
               <Text style={styles.modalTitle}>설정</Text>
 
-              {/* Premium 테스트 스위치 */}
-              <View style={styles.premiumTestRow}>
-                <Text style={styles.premiumTestLabel}>👑 프리미엄 모드 (테스트)</Text>
-                <Switch
-                  value={userInfo.is_premium}
-                  onValueChange={onTogglePremium}
-                  trackColor={{ false: '#d1d5db', true: '#fbbf24' }}
-                  thumbColor={userInfo.is_premium ? '#f59e0b' : '#f3f4f6'}
-                />
-              </View>
+              {/* 🗑️ 프리미엄 스위치 UI 삭제됨 */}
 
               <Text style={styles.modalSubtitle}>비상연락망 관리 (최대 {MAX_EMERGENCY_CONTACTS}명)</Text>
               
               {/* 연락망 리스트 */}
               <ScrollView style={styles.contactsList}>
-                {emergencyContacts.map((contact, index) => (
+                {(emergencyContacts || []).map((contact, index) => (
                   <View key={index} style={styles.contactItem}>
                     <Text style={styles.contactText}>{contact}</Text>
                     <TouchableOpacity onPress={() => handleRemoveContact(index)}>
@@ -147,7 +138,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </TouchableOpacity>
             </>
           ) : (
-            // 초기화 확인 화면
+            // 초기화 확인 화면 (유지)
             <View style={{ alignItems: 'center', paddingVertical: 20 }}>
               <Text style={[styles.modalTitle, { color: '#ef4444' }]}>{MESSAGES.RESET_CONFIRM_TITLE}</Text>
               <Text style={[styles.modalSubtitle, { marginBottom: 30 }]}>

@@ -15,6 +15,8 @@ import { RegisterModal } from '../components/modals/RegisterModal';
 import { MathChallengeModal } from '../components/modals/MathChallengeModal';
 import { SettingsModal } from '../components/modals/SettingsModal';
 import { LegalModal } from '../components/LegalModal';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';// 👈 Crown이 없으면 추가하세요!
 
 // 푸시 알림 핸들러 설정 (앱이 켜져있을 때도 알림 표시)
 setupNotificationHandler();
@@ -101,6 +103,7 @@ export default function Index() {
    * 메인 버튼 클릭 (Premium/Free 분기)
    */
   const handleCheckInButtonPress = (): void => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); // 📳 묵직한 진동 쾅!
     if (!userInfo) return;
 
     if (userInfo.is_premium) {
@@ -163,6 +166,36 @@ export default function Index() {
     }
   };
 
+  // app/index.tsx 안에 추가할 함수
+
+const handlePremiumPress = () => {
+  if (!userInfo) return;
+
+  if (userInfo?.is_premium) {
+    Alert.alert('정보', '이미 프리미엄 회원이십니다! 👑');
+    return;
+  }
+
+  if (userInfo?.is_admin) {
+    // 👑 관리자다! -> 바로 프리미엄 켜주기 (기존 togglePremium 함수 활용)
+    togglePremium(); 
+  } else {
+    // 👶 일반인이다! -> "결제하세요" 모달 띄우기
+    Alert.alert(
+      '프리미엄 업그레이드',
+      '프리미엄 회원이 되면 수학 문제를 풀고 뇌 건강도 챙길 수 있습니다!\n(현재는 베타 테스트 기간이라 무료로 제공됩니다.)',
+      [
+        { text: '닫기', style: 'cancel' },
+        { 
+          text: '무료 체험하기', 
+          onPress: () => togglePremium(), // 지금은 착하니까 그냥 켜줌 (나중엔 결제창 연결)
+          style: 'default'
+        }
+      ]
+    );
+  }
+};
+
   /**
    * 데이터 초기화
    */
@@ -211,40 +244,71 @@ export default function Index() {
           onClose={() => setShowSettingsModal(false)}
           userInfo={userInfo}
           onSaveContacts={handleSaveContacts}
-          onTogglePremium={togglePremium}
           onOpenLegal={handleOpenLegal}
           onReset={handleReset}
         />
       )}
 
 
-      {/* 메인 화면 */}
+
+      {/* 메인 화면 헤더 */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
+          {/* 왼쪽: 날짜 및 인사말 */}
           <View>
             <Text style={styles.dateText}>{getLocaleDateString()}</Text>
             <Text style={styles.greetingText}>
               {userInfo ? `${userInfo.name}님, 안녕하세요!` : '안녕하세요!'}
             </Text>
-            {userInfo?.is_premium && (
-              <View style={styles.premiumBadge}>
-                <Crown size={16} color="#92400e" fill="#fbbf24" />
-                <Text style={styles.premiumBadgeText}>Premium 사용 중</Text>
-              </View>
-            )}
+            {/* 🔥 기존 'Premium 사용 중' 배지는 제거했습니다. 깔끔하죠? */}
           </View>
-          <TouchableOpacity onPress={() => setShowSettingsModal(true)} style={styles.settingsIcon}>
-            <Settings size={28} color="#374151" />
-          </TouchableOpacity>
+          
+          {/* 오른쪽: 상단 아이콘 버튼들 */}
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            {/* 👑 프리미엄 버튼 (추가됨!) */}
+            <TouchableOpacity 
+              onPress={handlePremiumPress} 
+              style={{ marginRight: 16, padding: 4 }} // 터치 영역 확보 및 간격 조절
+              activeOpacity={0.7}
+            >
+              <Crown
+                size={28}
+                // 프리미엄이면 금색으로 채우고, 아니면 회색 테두리만
+                color={userInfo?.is_premium ? "#fbbf24" : "#9ca3af"}
+                fill={userInfo?.is_premium ? "#fbbf24" : "none"}
+              />
+            </TouchableOpacity>
+
+            {/* ⚙️ 설정 버튼 (기존 유지) */}
+            <TouchableOpacity 
+              onPress={() => setShowSettingsModal(true)} 
+              style={styles.settingsIcon}
+              activeOpacity={0.7}
+            >
+              <Settings size={28} color="#374151" />
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
       <TouchableOpacity
         onPress={handleCheckInButtonPress}
         disabled={isChecked}
-        style={[styles.checkButton, isChecked ? styles.buttonChecked : styles.buttonUnchecked]}
+        style={styles.checkButton} // 기존 스타일에서 backgroundColor는 빼야 함
       >
-        <Text style={styles.buttonText}>{isChecked ? '완료' : '생존 신고'}</Text>
+        <LinearGradient
+          // 완료되면 회색, 아니면 영롱한 파란+보라 그라데이션
+          colors={isChecked ? ['#9ca3af', '#6b7280'] : ['#3b82f6', '#8b5cf6']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{ 
+            width: '100%', height: '100%', 
+            justifyContent: 'center', alignItems: 'center', 
+            borderRadius: 20 // 버튼 둥글기
+          }}
+        >
+          <Text style={styles.buttonText}>{isChecked ? '오늘 완료!' : '생존 신고하기'}</Text>
+        </LinearGradient>
       </TouchableOpacity>
     </View>
   );

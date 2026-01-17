@@ -6,6 +6,7 @@ export interface UserInfo {
   emergency_contacts: string[];
   is_premium: boolean;
   push_token?: string | null;
+  is_admin?: boolean;
 }
 
 export interface MathProblem {

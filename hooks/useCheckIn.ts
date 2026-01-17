@@ -24,7 +24,7 @@ export const useCheckIn = (userId: string | null) => {
         .from('users')
         .select('last_seen_at')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
 

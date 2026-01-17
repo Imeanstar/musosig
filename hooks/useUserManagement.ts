@@ -142,7 +142,7 @@ const registerOrLogin = async (name: string, phone: string): Promise<boolean> =>
         id: userId,
         name: name.trim(),
         phone: phone.trim(),
-        last_seen_at: new Date().toISOString(),
+        // last_seen_at: new Date().toISOString(),
       })
       .select()
       .single();
@@ -157,6 +157,7 @@ const registerOrLogin = async (name: string, phone: string): Promise<boolean> =>
       emergency_contacts: userData.emergency_contacts || [],
       is_premium: userData.is_premium || false,
       push_token: userData.push_token || null,
+      is_admin: userData.is_admin,
     };
 
     await saveUserToStorage(userToSave);
