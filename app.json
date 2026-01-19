@@ -23,6 +23,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.musosik.app",
+      "googleServicesFile": "./google-services.json",
       "versionCode": 6,
       "permissions": [
         "RECEIVE_BOOT_COMPLETED",
