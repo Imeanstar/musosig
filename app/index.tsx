@@ -17,6 +17,7 @@ import { SettingsModal } from '../components/modals/SettingsModal';
 import { LegalModal } from '../components/LegalModal';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';// 👈 Crown이 없으면 추가하세요!
+import { Platform } from 'react-native';
 
 // 푸시 알림 핸들러 설정 (앱이 켜져있을 때도 알림 표시)
 setupNotificationHandler();
@@ -102,8 +103,11 @@ export default function Index() {
   /**
    * 메인 버튼 클릭 (Premium/Free 분기)
    */
-  const handleCheckInButtonPress = (): void => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); // 📳 묵직한 진동 쾅!
+  const handleCheckInButtonPress = async () => {
+    if (Platform.OS !== 'web') {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); // 📳 묵직한 진동 쾅!
+    }
+    
     if (!userInfo) return;
 
     if (userInfo.is_premium) {

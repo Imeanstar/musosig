@@ -1,21 +1,21 @@
 {
   "expo": {
     "name": "무소식",
-    "slug": "Anbu",
+    "slug": "musosik",
     "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": false,
-    "scheme": "anbu",
+    "scheme": "musosik",
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.musosig.app"
+      "bundleIdentifier": "com.musosik.app"
     },
     "android": {
       "adaptiveIcon": {
@@ -32,11 +32,6 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    },
-    "extra": {
-      "eas": {
-        "projectId": "fb9d4656-08fb-45dc-bbca-7cfcc423f8b3"
-      }
     },
     "plugins": [
       [
@@ -56,6 +51,11 @@
           }
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "101ff0c9-6374-4a5e-bdb6-19abc95556cb"
+      }
+    }
   }
 }
