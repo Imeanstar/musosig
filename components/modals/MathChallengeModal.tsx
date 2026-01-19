@@ -1,7 +1,7 @@
 // components/modals/MathChallengeModal.tsx - 수학 문제 모달 컴포넌트
 import React, { useState } from 'react';
 import { Modal, View, Text, TextInput, TouchableOpacity, Alert } from 'react-native';
-import { styles } from '../../app/styles';
+import { styles } from '../../styles/styles';
 import { MathProblem } from '../../types';
 import { MESSAGES } from '../../constants';
 

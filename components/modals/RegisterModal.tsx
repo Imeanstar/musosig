@@ -1,7 +1,7 @@
 // components/modals/RegisterModal.tsx - 회원가입 모달 컴포넌트
 import React, { useState } from 'react';
 import { Modal, View, Text, TextInput, TouchableOpacity } from 'react-native';
-import { styles } from '../../app/styles';
+import { styles } from '../../styles/styles';
 
 interface RegisterModalProps {
   visible: boolean;

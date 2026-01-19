@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Modal, View, Text, TextInput, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { FileText, Lock } from 'lucide-react-native';
-import { styles } from '../../app/styles';
+import { styles } from '../../styles/styles';
 import { UserInfo, LegalDocType } from '../../types';
 import { MAX_EMERGENCY_CONTACTS, MESSAGES } from '../../constants';
 

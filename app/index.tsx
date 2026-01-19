@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, Alert, Linking } from 'react-native';
 import { Settings, Crown } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
-import { styles } from './styles';
+import { styles } from '../styles/styles';
 import { UserInfo, MathProblem, LegalDocType } from '../types';
 import { LEGAL_DOCUMENTS, MATH_CHALLENGE } from '../constants';
 import { useUserManagement } from '../hooks/useUserManagement';
