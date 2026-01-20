@@ -32,7 +32,7 @@ export const useUserManagement = () => {
       const { data: { session } } = await supabase.auth.getSession();
 
       // 세션이 아예 없거나, 로컬에 저장된 ID와 실제 세션 ID가 다르다면?
-      if (!session || session.user.id !== user.user_id) {
+      if (!session || session.user.id !== user.id) {
         console.warn("👻 유령 로그인 감지! (세션 만료 또는 불일치) -> 자동 로그아웃 처리");
         
         await clearAllStorage(); // 로컬 데이터 삭제 (초기화)
@@ -44,7 +44,7 @@ export const useUserManagement = () => {
       const { data: dbUser, error } = await supabase
         .from('users')
         .select('*')
-        .eq('id', user.user_id)
+        .eq('id', user.id)
         .single();
 
       if (!error && dbUser) {
@@ -97,7 +97,7 @@ export const useUserManagement = () => {
         const { error } = await supabase
           .from('users')
           .update({ push_token: newToken })
-          .eq('id', user.user_id);
+          .eq('id', user.id); // ✅ user_id -> id 수정
 
         if (!error) {
           await AsyncStorage.setItem(STORAGE_KEYS.PUSH_TOKEN, newToken);
@@ -173,13 +173,25 @@ export const useUserManagement = () => {
 
       // 6. 앱 내 상태 업데이트
       const userToSave: UserInfo = {
-        user_id: userData.id,
+        id: userData.id,             // ✅ [필수] user_id -> id 로 변경 (DB 컬럼명 통일)
+        role: userData.role,         // ✅ [필수] 역할 정보 추가
+        
         name: userData.name,
         phone: userData.phone,
+        
+        // 새로 추가된 필드들도 챙겨주면 좋습니다 (없으면 null)
+        pairing_code: userData.pairing_code || null,
+        manager_id: userData.manager_id || null,
+        nickname: userData.nickname || null,
+        relation_tag: userData.relation_tag || null,
+        
         emergency_contacts: userData.emergency_contacts || [],
         is_premium: userData.is_premium || false,
         push_token: userData.push_token || null,
         is_admin: userData.is_admin,
+        
+        // 💡 [호환성] 기존 코드들이 user_id를 찾을 수 있으니 당분간 같이 넣어둠
+        user_id: userData.id, 
       };
 
       await saveUserToStorage(userToSave);
@@ -207,7 +219,7 @@ export const useUserManagement = () => {
       const { error } = await supabase
         .from('users')
         .update({ is_premium: newStatus })
-        .eq('id', userInfo.user_id);
+        .eq('id', userInfo.id); // ✅ user_id -> id 수정
 
       if (error) throw error;
       await savePremiumStatus(newStatus);

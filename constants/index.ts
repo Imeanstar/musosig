@@ -59,10 +59,16 @@ export const MESSAGES = {
 
 // AsyncStorage 키
 export const STORAGE_KEYS = {
-  USER_ID: 'user_id',
+  USER_ID: 'id',
   USER_NAME: 'user_name',
   USER_PHONE: 'user_phone',
   EMERGENCY_CONTACTS: 'emergency_contacts',
   IS_PREMIUM: 'is_premium',
   PUSH_TOKEN: 'push_token',
+
+  // 👇 [새로 추가해야 할 키들]
+  USER_ROLE: 'user_role',         // 역할
+  PAIRING_CODE: 'pairing_code',   // 페어링 코드
+  MANAGER_ID: 'manager_id',       // 매니저 ID
+  NICKNAME: 'nickname',           // 닉네임
 } as const;

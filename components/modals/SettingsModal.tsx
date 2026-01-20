@@ -51,7 +51,7 @@ const [emergencyContacts, setEmergencyContacts] = useState<string[]>(userInfo.em
   };
 
   const handleClose = () => {
-    setEmergencyContacts(userInfo.emergency_contacts);
+    setEmergencyContacts(userInfo?.emergency_contacts || []);
     setResetStep(0);
     onClose();
   };
