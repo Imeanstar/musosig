@@ -14,7 +14,6 @@
     "expo": "~52.0.28",
     "expo-build-properties": "~0.13.3",
     "expo-constants": "~17.0.3",
-    "expo-dev-client": "~5.0.20",
     "expo-device": "~7.0.2",
     "expo-haptics": "~14.0.1",
     "expo-linear-gradient": "~14.0.2",

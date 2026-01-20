@@ -2,7 +2,7 @@
   "expo": {
     "name": "무소식",
     "slug": "musosik",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -23,8 +23,8 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.musosik.app",
-      "googleServicesFile": "./google-services.json",
-      "versionCode": 6,
+      
+      "versionCode": 7,
       "permissions": [
         "RECEIVE_BOOT_COMPLETED",
         "VIBRATE",
