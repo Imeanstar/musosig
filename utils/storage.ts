@@ -10,13 +10,17 @@ export const saveUserToStorage = async (user: UserInfo): Promise<void> => {
   try {
     const updates: [string, string][] = [
       [STORAGE_KEYS.USER_ID, user.id],
-      [STORAGE_KEYS.USER_NAME, user.name],
-      [STORAGE_KEYS.USER_PHONE, user.phone],
+      // 이름이 없을 경우를 대비해 기본값 처리
+      [STORAGE_KEYS.USER_NAME, user.name || '이름 없음'], 
+      
+      // 🔥 [핵심 수정] phone이 null이면 빈 문자열('')로 바꿔서 저장
+      [STORAGE_KEYS.USER_PHONE, user.phone || ''], 
+      
       // [필수] 역할 저장
       [STORAGE_KEYS.USER_ROLE, user.role], 
     ];
 
-    // 선택적 필드들은 값이 있을 때만 저장
+    // 선택적 필드들은 값이 있을 때만 저장 (if문 덕분에 안전함)
     if (user.emergency_contacts) {
       updates.push([STORAGE_KEYS.EMERGENCY_CONTACTS, JSON.stringify(user.emergency_contacts)]);
     }
@@ -29,10 +33,12 @@ export const saveUserToStorage = async (user: UserInfo): Promise<void> => {
     if (user.manager_id) updates.push([STORAGE_KEYS.MANAGER_ID, user.manager_id]);
     if (user.nickname) updates.push([STORAGE_KEYS.NICKNAME, user.nickname]);
     
-    // 프리미엄 여부
+    // 프리미엄 여부 (boolean -> string 변환)
     updates.push([STORAGE_KEYS.IS_PREMIUM, String(user.is_premium || false)]);
 
     await AsyncStorage.multiSet(updates);
+    // console.log("✅ 스토리지 저장 완료"); // 디버깅용 로그
+
   } catch (error) {
     console.error('스토리지 저장 실패:', error);
   }

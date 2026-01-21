@@ -90,12 +90,28 @@
 
 # Version Log
 ## Ver 1.0
-<img width="600" alt="ver1_1" src="https://github.com/user-attachments/assets/cd5ca22d-3b8a-4ef2-bb47-9631e32cfbc1">
-<img width="600" alt="ver1_2" src="https://github.com/user-attachments/assets/8f82edc7-bebc-47d4-8ec3-8fa7d83b131a">
-<img width="600" alt="ver1_3" src="https://github.com/user-attachments/assets/89f5f18d-d240-4d5d-9244-59894b95d27d">
-<img width="600" alt="ver1_4" src="https://github.com/user-attachments/assets/93cff638-2241-43dc-9d59-30aa4629d1c5">
-<img width="600" alt="ver1_5" src="https://github.com/user-attachments/assets/524ca1c9-32d8-4ba7-b633-4dfc14fa8ae1">
-<img width="600" alt="ver1_6" src="https://github.com/user-attachments/assets/bfb9bdfc-9fec-44e6-8577-07afb514c8cf">
+<table>
+  <tr>
+    <td>
+      <img src="https://github.com/user-attachments/assets/cd5ca22d-3b8a-4ef2-bb47-9631e32cfbc1" width="200">
+    </td>
+    <td>
+      <img src="https://github.com/user-attachments/assets/8f82edc7-bebc-47d4-8ec3-8fa7d83b131a" width="200">
+    </td>
+    <td>
+      <img src="https://github.com/user-attachments/assets/89f5f18d-d240-4d5d-9244-59894b95d27d" width="200">
+    </td>
+    <td>
+      <img src="https://github.com/user-attachments/assets/93cff638-2241-43dc-9d59-30aa4629d1c5" width="200">
+    </td>
+    <td>
+      <img src="https://github.com/user-attachments/assets/524ca1c9-32d8-4ba7-b633-4dfc14fa8ae1" width="200">
+    </td>
+    <td>
+      <img src="https://github.com/user-attachments/assets/bfb9bdfc-9fec-44e6-8577-07afb514c8cf" width="200">
+    </td>
+  </tr>
+</table>
 
 ---
 

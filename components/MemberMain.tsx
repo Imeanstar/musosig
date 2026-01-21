@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { LogOut, Heart } from 'lucide-react-native';
-// 👇 [에러 해결 1] 이 줄이 꼭 있어야 'supabase' 에러가 안 납니다!
 import { supabase } from '@/lib/supabase';
 import { useUserManagement } from '../hooks/useUserManagement';
 
@@ -11,38 +10,43 @@ interface MemberMainProps {
 }
 
 export function MemberMain({ onBack }: MemberMainProps) {
-  const { userInfo } = useUserManagement();
-  const [hasCheckedIn, setHasCheckedIn] = useState(false); // 오늘 안부 전했는지 여부
+  // 🔥 [수정 1] loadUser 함수도 같이 가져옵니다.
+  const { userInfo, loadUser } = useUserManagement();
   
-  // 👇 [에러 해결 2] 이 줄이 꼭 있어야 'setIsLoading' 에러가 안 납니다!
+  const [hasCheckedIn, setHasCheckedIn] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  
   const [todayDate, setTodayDate] = useState('');
 
-  // 1. 앱 켜면 오늘 이미 안부를 전했는지 확인
+  // 1. 앱 켜면 -> 유저 정보 로드 -> 오늘 출석 확인
   useEffect(() => {
-    checkTodayStatus();
-    
-    // 날짜 표시용
-    const now = new Date();
-    setTodayDate(`${now.getMonth() + 1}월 ${now.getDate()}일`);
+    const init = async () => {
+      // 🔥 [수정 2] 화면이 켜지면 저장된 유저 정보를 불러옵니다!
+      await loadUser(); 
+      
+      const now = new Date();
+      setTodayDate(`${now.getMonth() + 1}월 ${now.getDate()}일`);
+    };
+    init();
   }, []);
+
+  // userInfo가 로드되면 -> 출석 여부 확인 (자동 실행)
+  useEffect(() => {
+    if (userInfo) {
+      console.log(`[MemberMain] 유저 로드 완료: ${userInfo.name}`);
+      checkTodayStatus();
+    }
+  }, [userInfo]);
 
   const checkTodayStatus = async () => {
     if (!userInfo) return;
     try {
-      // 한국 시간 기준 날짜 확인을 위해 로컬 시간 활용
-      const today = new Date();
+      const startOfDay = new Date(new Date().setHours(0, 0, 0, 0)).toISOString();
       
-      // check_in_logs에서 오늘 날짜 기록이 있는지 확인
-      // (여기서는 간단하게 created_at 기준으로 조회)
-      const startOfDay = new Date(today.setHours(0, 0, 0, 0)).toISOString();
-
       const { data } = await supabase
         .from('check_in_logs')
         .select('id')
         .eq('member_id', userInfo.id)
-        .gte('created_at', startOfDay) // 오늘 0시 이후 기록
+        .gte('created_at', startOfDay)
         .limit(1);
 
       if (data && data.length > 0) {
@@ -53,15 +57,18 @@ export function MemberMain({ onBack }: MemberMainProps) {
     }
   };
 
-  // 🔥 2. 안부 전하기 버튼 클릭 시 실행되는 함수
   const handleCheckIn = async () => {
-    if (!userInfo) return;
+    if (!userInfo) {
+      Alert.alert("오류", "사용자 정보를 불러오는 중입니다. 잠시만 기다려주세요.");
+      return;
+    }
+
     setIsLoading(true);
 
     try {
       const now = new Date().toISOString(); 
 
-      // 1️⃣ [실시간용] users 테이블의 last_seen_at 업데이트 (알림 서버용)
+      // 1️⃣ [실시간용] users 테이블 업데이트
       const { error: userError } = await supabase
         .from('users')
         .update({ last_seen_at: now })
@@ -69,27 +76,21 @@ export function MemberMain({ onBack }: MemberMainProps) {
 
       if (userError) throw userError;
 
-      // 2️⃣ [달력용] check_in_logs에 기록 추가 (하루 1번 제한)
-      // (이미 오늘 기록이 있으면 DB Unique Index 덕분에 에러가 나거나 무시됨 -> 괜찮음!)
+      // 2️⃣ [달력용] check_in_logs 기록 추가
       await supabase
         .from('check_in_logs')
-        .insert({
-          member_id: userInfo.id,
-          // created_at은 DB가 알아서 넣음
-        })
-        .select(); 
+        .insert({ member_id: userInfo.id });
 
-      // 성공 처리
       setHasCheckedIn(true);
       Alert.alert("성공", "보호자에게 안부를 전했습니다! 😊");
 
     } catch (e: any) {
-      console.error(e);
-      // 인덱스 중복 에러(이미 오늘 찍음)는 성공으로 간주해도 됨
-      if (e.message && e.message.includes('unique constraint')) {
+      // 중복 에러는 성공으로 간주
+      if (e.code === '23505') {
          setHasCheckedIn(true);
          Alert.alert("알림", "오늘은 이미 안부를 전하셨어요! 😊");
       } else {
+         console.error(e);
          Alert.alert("오류", "전송에 실패했습니다. 다시 시도해주세요.");
       }
     } finally {
@@ -97,13 +98,16 @@ export function MemberMain({ onBack }: MemberMainProps) {
     }
   };
 
+  // 화면 표시 이름 (없으면 '회원'으로 표시)
+  const displayName = userInfo?.nickname || userInfo?.name || '회원';
+
   return (
     <View style={styles.container}>
       {/* 헤더 */}
       <View style={styles.header}>
         <View>
           <Text style={styles.greeting}>안녕하세요,</Text>
-          <Text style={styles.name}>{userInfo?.nickname || userInfo?.name}님!</Text>
+          <Text style={styles.name}>{displayName}님!</Text>
         </View>
         <TouchableOpacity onPress={onBack} style={styles.logoutButton}>
           <LogOut color="#6b7280" size={24} />
@@ -113,7 +117,6 @@ export function MemberMain({ onBack }: MemberMainProps) {
       <View style={styles.content}>
         <Text style={styles.dateText}>오늘은 {todayDate} 입니다.</Text>
 
-        {/* 메인 버튼 영역 */}
         <View style={styles.card}>
           <LinearGradient
             colors={hasCheckedIn ? ['#10b981', '#059669'] : ['#f97316', '#ea580c']}
@@ -125,7 +128,7 @@ export function MemberMain({ onBack }: MemberMainProps) {
               <TouchableOpacity 
                 style={styles.touchArea} 
                 onPress={handleCheckIn}
-                disabled={hasCheckedIn} // 이미 했으면 클릭 방지
+                disabled={hasCheckedIn} 
               >
                 <Heart 
                   size={80} 

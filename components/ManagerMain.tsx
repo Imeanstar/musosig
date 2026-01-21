@@ -172,6 +172,36 @@ export function ManagerMain({ onBack, userInfo }: ManagerMainProps) {
     setCurrentDate(newDate);
   };
 
+  // 🔥 [수정됨] 기기 재연결 코드 생성 함수
+  const generateReLinkCode = async () => {
+    if (!selectedMember) return;
+    setIsCodeLoading(true);
+    try {
+      const newCode = Math.floor(100000 + Math.random() * 900000).toString();
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+  
+      // 1. RPC 함수 호출 (권한 문제 해결!)
+      const { error } = await supabase.rpc('generate_relink_code', {
+        target_member_id: selectedMember.id,
+        new_code: newCode,
+        expires_at: expiresAt
+      });
+  
+      if (error) throw error;
+  
+      // 2. 성공 시 모달 띄우기
+      setInviteCode(newCode);
+      setStep('show'); 
+      setShowInviteModal(true);
+      
+    } catch (e: any) {
+      console.error(e);
+      Alert.alert("오류", "코드를 생성하지 못했습니다. (권한 오류 등)");
+    } finally {
+      setIsCodeLoading(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
       {/* 헤더 */}
@@ -280,6 +310,23 @@ export function ManagerMain({ onBack, userInfo }: ManagerMainProps) {
                 })}
               </View>
             </View>
+
+            {/* 👇 [추가] 기기 재연결 섹션 */}
+                <View style={styles.relinkCard}>
+                <Text style={styles.relinkTitle}>기기 변경 / 재설치</Text>
+                <Text style={styles.relinkDesc}>
+                    멤버가 앱을 삭제했거나 기기를 바꿨나요?{'\n'}
+                    아래 버튼을 눌러 연결 코드를 다시 발급해주세요.{'\n'}
+                    (기존 기록이 유지됩니다)
+                </Text>
+                <TouchableOpacity 
+                    style={styles.relinkButton} 
+                    onPress={generateReLinkCode}
+                >
+                    <RefreshCw size={20} color="white" style={{ marginRight: 8 }} />
+                    <Text style={styles.relinkButtonText}>재연결 코드 발급</Text>
+                </TouchableOpacity>
+                </View>
           </ScrollView>
         )}
 
@@ -494,4 +541,42 @@ const styles = StyleSheet.create({
     shadowColor: '#3b82f6', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8
   },
   generateButtonText: { color: 'white', fontWeight: 'bold', fontSize: 18 },
+  relinkCard: {
+    marginTop: 24,
+    backgroundColor: '#fff',
+    padding: 20,
+    borderRadius: 16,
+    // 그림자 효과
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  relinkTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    marginBottom: 8,
+  },
+  relinkDesc: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  relinkButton: {
+    flexDirection: 'row',
+    backgroundColor: '#4b5563', // 진한 회색 (차분한 느낌)
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  relinkButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
 });
