@@ -1,25 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, Alert, Linking, Platform } from 'react-native';
-import { Settings, Crown } from 'lucide-react-native';
+import { View, ActivityIndicator, Alert, StyleSheet, Platform } from 'react-native';
 import { supabase } from '@/lib/supabase';
-import { styles } from '../styles/styles';
-import { MathProblem, LegalDocType } from '../types';
-import { LEGAL_DOCUMENTS, MATH_CHALLENGE } from '../constants';
 import { useUserManagement } from '../hooks/useUserManagement';
-import { useCheckIn } from '../hooks/useCheckIn';
-import { saveEmergencyContacts } from '../utils/storage';
-import { getLocaleDateString } from '../utils/date';
-import { RegisterModal } from '../components/modals/RegisterModal';
-import { MathChallengeModal } from '../components/modals/MathChallengeModal';
-import { SettingsModal } from '../components/modals/SettingsModal';
-import { LinearGradient } from 'expo-linear-gradient';
-import * as Haptics from 'expo-haptics';
+import { clearAllStorage } from '../utils/storage'; // 👈 [추가] 로그아웃 시 저장소 비우기 위해 필요
 
-// 👇 알림 관련 임포트
+// 🧩 컴포넌트 불러오기
+import { RoleSelection } from '../components/RoleSelection';
+import { MemberPairing } from '../components/MemberPairing';
+import { MemberMain } from '../components/MemberMain';
+import { ManagerMain } from '../components/ManagerMain';
+import { RegisterModal } from '../components/modals/RegisterModal'; 
+
+// 👇 알림 관련
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 
-// 1. 알림 핸들러 설정 (앱이 켜져 있을 때도 알림 수신)
+// 1. 알림 핸들러
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
@@ -29,304 +25,201 @@ Notifications.setNotificationHandler({
 });
 
 export default function Index() {
-  // 커스텀 훅
-  const {
-    userInfo,
-    setUserInfo,
-    isLoading,
-    setIsLoading,
-    loadUser,
-    registerOrLogin,
-    togglePremium,
-    resetAllData,
-  } = useUserManagement();
+  const { userInfo, setUserInfo, isLoading, setIsLoading, loadUser, registerOrLogin } = useUserManagement();
+  
+  // 화면 상태 관리 ('selection' | 'member_pairing' | 'manager_login')
+  const [currentView, setCurrentView] = useState<'selection' | 'member_pairing' | 'manager_login'>('selection');
 
-  const { isChecked, setIsChecked, checkTodayCheckIn, performCheckIn } = useCheckIn(
-    userInfo?.user_id || null
-  );
-
-  // 모달 상태
-  const [showRegisterModal, setShowRegisterModal] = useState(false);
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [showMathModal, setShowMathModal] = useState(false);
-
-  // 수학 문제 상태
-  const [mathProblem, setMathProblem] = useState<MathProblem>({ num1: 0, num2: 0, answer: 0 });
-
-  // 앱 시작 시 초기화
+  // 1. 앱 시작 시 유저 정보 로드
   useEffect(() => {
-    initializeApp();
+    loadUser();
   }, []);
 
-  // 👇 [핵심] 유저 정보가 로드되면 -> 토큰 발급 & DB 저장 자동 실행
+  // 2. 로그인 성공 시 -> 알림 토큰 저장
   useEffect(() => {
-    if (userInfo?.user_id) {
-      registerAndSaveToken();
-      checkTodayCheckIn(); // 출석 여부도 확인
+    if (userInfo?.id) {
+      registerAndSaveToken(userInfo.id);
     }
   }, [userInfo]);
 
-  const initializeApp = async () => {
-    try {
-      setIsLoading(true);
-      const user = await loadUser();
-      
-      if (!user) {
-        setShowRegisterModal(true);
+  // 🚪 [핵심 수정] 로그아웃 핸들러 함수 정의
+  const handleLogout = async () => {
+    Alert.alert("로그아웃", "정말 로그아웃 하시겠습니까?", [
+      { text: "취소", style: "cancel" },
+      { 
+        text: "로그아웃", 
+        style: "destructive",
+        onPress: async () => {
+          try {
+            // 1. Supabase 로그아웃
+            await supabase.auth.signOut();
+            
+            // 2. 로컬 기기 저장소 초기화 (utils/storage.ts)
+            await clearAllStorage();
+            
+            // 3. 화면 상태를 '선택 화면'으로 강제 리셋 (이게 없으면 로그인 모달이 뜸)
+            setCurrentView('selection'); 
+            
+            // 4. 유저 상태 비우기 -> 화면 전환 발생
+            setUserInfo(null);
+            
+          } catch (e) {
+            console.error("로그아웃 실패:", e);
+            Alert.alert("오류", "로그아웃 중 문제가 발생했습니다.");
+          }
+        } 
       }
-    } catch (error) {
-      console.error('앱 초기화 실패:', error);
-    } finally {
-      setIsLoading(false);
-    }
+    ]);
   };
 
-  // 토큰 발급 및 Supabase 저장 통합 함수
-  const registerAndSaveToken = async () => {
-    try {
-      const token = await registerForPushNotificationsAsync();
-      if (token) {
-        console.log("📢 알림 토큰 발급 완료:", token);
-        
-        // Supabase에 저장
-        const { error } = await supabase
-          .from('users')
-          .update({ push_token: token })
-          .eq('id', userInfo?.user_id);
-
-        if (error) console.error("❌ 토큰 저장 실패:", error);
-        else console.log("✅ Supabase에 토큰 저장 성공");
-      }
-    } catch (e) {
-      console.error("토큰 등록 중 에러:", e);
-    }
-  };
-
-  const handleRegister = async (name: string, phone: string): Promise<boolean> => {
-    const success = await registerOrLogin(name, phone);
-    if (success) {
-      setShowRegisterModal(false);
-    }
-    return success;
-  };
-
-  const generateMathProblem = (): void => {
-    const num1 = Math.floor(Math.random() * (MATH_CHALLENGE.MAX_NUMBER - MATH_CHALLENGE.MIN_NUMBER + 1)) + MATH_CHALLENGE.MIN_NUMBER;
-    const num2 = Math.floor(Math.random() * (MATH_CHALLENGE.MAX_NUMBER - MATH_CHALLENGE.MIN_NUMBER + 1)) + MATH_CHALLENGE.MIN_NUMBER;
-    setMathProblem({ num1, num2, answer: num1 + num2 });
-  };
-
-  const handleCheckInButtonPress = async () => {
-    if (Platform.OS !== 'web') {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    }
-    
-    if (!userInfo) return;
-
-    if (userInfo.is_premium) {
-      generateMathProblem();
-      setShowMathModal(true);
-    } else {
-      performCheckIn();
-    }
-  };
-
-  const handleMathCorrectAnswer = async (): Promise<void> => {
-    setShowMathModal(false);
-    await performCheckIn();
-  };
-
-  const handleSaveContacts = async (contacts: string[]): Promise<void> => {
-    if (!userInfo) return;
-
-    try {
-      const { error } = await supabase
-        .from('users')
-        .update({ emergency_contacts: contacts })
-        .eq('id', userInfo.user_id);
-
-      if (error) throw error;
-      await saveEmergencyContacts(contacts);
-      setUserInfo({ ...userInfo, emergency_contacts: contacts });
-      Alert.alert('완료', '비상연락망이 저장되었습니다.');
-    } catch (error) {
-      Alert.alert('오류', '저장에 실패했습니다.');
-    }
-  };
-
-  const handleOpenLegal = async (type: LegalDocType): Promise<void> => {
-    const url = LEGAL_DOCUMENTS[type].url;
-    try {
-      await Linking.openURL(url);
-    } catch (error) {
-      Alert.alert('오류', '링크를 열 수 없습니다.');
-    }
-  };
-
-  const handlePremiumPress = () => {
-    if (!userInfo) return;
-    if (userInfo?.is_premium) {
-      Alert.alert('정보', '이미 프리미엄 회원이십니다! 👑');
-      return;
-    }
-    // 관리자 모드 등은 필요한 경우 유지
-    if (userInfo?.is_admin) {
-      togglePremium(); 
-    } else {
-      Alert.alert(
-        '프리미엄 업그레이드',
-        '프리미엄 회원이 되면 수학 문제를 풀고 뇌 건강도 챙길 수 있습니다!',
-        [
-          { text: '닫기', style: 'cancel' },
-          { text: '무료 체험하기', onPress: () => togglePremium(), style: 'default' }
-        ]
-      );
-    }
-  };
-
-  const handleReset = async (): Promise<void> => {
-    setIsLoading(true);
-    setShowSettingsModal(false);
-    try {
-      await resetAllData();
-      setIsChecked(false);
-      setShowRegisterModal(true);
-      setTimeout(() => setIsLoading(false), 500);
-    } catch (error) {
-      setIsLoading(false);
-      Alert.alert('오류', '초기화 실패');
-    }
-  };
-
+  // 🔄 로딩 중
   if (isLoading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#3b82f6" />
-        <Text style={styles.loadingText}>잠시만 기다려주세요...</Text>
+      <View style={styles.centerContainer}>
+        <ActivityIndicator size="large" color="#ea580c" />
       </View>
     );
   }
 
-  return (
-    <View style={styles.container}>
-      {/* 모달 컴포넌트들 */}
-      <RegisterModal visible={showRegisterModal} onRegister={handleRegister} />
-
-      <MathChallengeModal
-        visible={showMathModal}
-        problem={mathProblem}
-        onCorrectAnswer={handleMathCorrectAnswer}
+  // ✅ [상태 1] 이미 로그인이 되어 있는 경우 (메인 화면으로)
+  if (userInfo) {
+    // A. 멤버라면 -> MemberMain (안부 전하기)
+    if (userInfo.role === 'member') {
+      // 멤버도 로그아웃이 필요할 수 있으니 핸들러 연결
+      return <MemberMain onBack={handleLogout} />; 
+    }
+    
+    // B. 매니저라면 -> ManagerMain (멤버 관리)
+    // 🔥 [적용 완료] 여기서 handleLogout을 전달합니다.
+    return (
+      <ManagerMain 
+        userInfo={userInfo} 
+        onBack={handleLogout} 
       />
+    );
+  }
 
-      {userInfo && (
-        <SettingsModal
-          visible={showSettingsModal}
-          onClose={() => setShowSettingsModal(false)}
-          userInfo={userInfo}
-          onSaveContacts={handleSaveContacts}
-          onOpenLegal={handleOpenLegal}
-          onReset={handleReset}
-        />
-      )}
+  // ❌ [상태 2] 로그인이 안 된 경우 (화면 분기)
 
-      {/* 헤더 영역 */}
-      <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <View>
-            <Text style={styles.dateText}>{getLocaleDateString()}</Text>
-            <Text style={styles.greetingText}>
-              {userInfo ? `${userInfo.name}님, 안녕하세요!` : '안녕하세요!'}
-            </Text>
-          </View>
+  // 2-1. 멤버: 코드 입력 화면
+  if (currentView === 'member_pairing') {
+    return (
+      <MemberPairing
+        onBack={() => setCurrentView('selection')} 
+        onPairingComplete={async (managerName) => {
+          console.log("👉 [Debug] 페어링 완료 콜백 실행됨!");
           
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <TouchableOpacity 
-              onPress={handlePremiumPress} 
-              style={{ marginRight: 16, padding: 4 }}
-              activeOpacity={0.7}
-            >
-              <Crown
-                size={28}
-                color={userInfo?.is_premium ? "#fbbf24" : "#9ca3af"}
-                fill={userInfo?.is_premium ? "#fbbf24" : "none"}
-              />
-            </TouchableOpacity>
+          setIsLoading(true); 
+          try {
+            // 1. 현재 세션이 진짜 있는지 확인
+            const { data: { session } } = await supabase.auth.getSession();
+            console.log("👉 [Debug] 현재 세션 상태:", session ? "로그인됨" : "세션 없음(NULL)");
+            
+            if (session) console.log("👉 [Debug] User ID:", session.user.id);
 
-            <TouchableOpacity 
-              onPress={() => setShowSettingsModal(true)} 
-              style={styles.settingsIcon}
-              activeOpacity={0.7}
-            >
-              <Settings size={28} color="#374151" />
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
+            // 2. 유저 정보 로드 시도
+            console.log("👉 [Debug] loadUser() 호출 시작");
+            await loadUser(); 
+            console.log("👉 [Debug] loadUser() 호출 끝");
+            
+            // 3. userInfo가 업데이트 됐는지 확인 (주의: 상태 업데이트는 즉시 반영 안 될 수 있음)
+            // 여기서는 loadUser 내부 동작이 중요함
+            
+          } catch (e) {
+            console.error("❌ [Debug] 에러 발생:", e);
+            Alert.alert('오류', '로그인 정보를 갱신하지 못했습니다.');
+          } finally {
+            setIsLoading(false);
+          }
+        }}
+      />
+    );
+  }
 
-      {/* 메인 생존 신고 버튼 */}
-      <TouchableOpacity
-        onPress={handleCheckInButtonPress}
-        disabled={isChecked}
-        style={styles.checkButton}
-      >
-        <LinearGradient
-          colors={isChecked ? ['#9ca3af', '#6b7280'] : ['#3b82f6', '#8b5cf6']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={{ 
-            width: '100%', height: '100%', 
-            justifyContent: 'center', alignItems: 'center', 
-            borderRadius: 20 
-          }}
-        >
-          <Text style={styles.buttonText}>{isChecked ? '오늘 완료!' : '생존 신고하기'}</Text>
-        </LinearGradient>
-      </TouchableOpacity>
-    </View>
+  // 2-2. 매니저: 로그인/가입 화면
+  if (currentView === 'manager_login') {
+    return (
+      <RegisterModal
+        visible={true} 
+        onRegister={async (name, phone) => {
+          // 매니저로 가입/로그인 시도
+          const success = await registerOrLogin(name, phone); 
+          if (success) return true;
+          return false;
+        }}
+        onClose={() => setCurrentView('selection')} // 닫기 버튼 누르면 선택 화면으로
+      />
+    );
+  }
+
+  // 2-3. 기본 화면: 역할 선택
+  return (
+    <RoleSelection
+      onRoleSelect={(role) => {
+        if (role === 'member') {
+          setCurrentView('member_pairing');
+        } else {
+          setCurrentView('manager_login');
+        }
+      }}
+    />
   );
 }
 
-// 👇 토큰 발급 함수 (핵심 로직 유지)
+// 👇 토큰 발급 로직
+async function registerAndSaveToken(userId: string) {
+  try {
+    const token = await registerForPushNotificationsAsync();
+    if (token) {
+      console.log("📢 알림 토큰 발급 완료:", token);
+      const { error } = await supabase
+        .from('users')
+        .update({ push_token: token })
+        .eq('id', userId);
+
+      if (error) console.error("❌ 토큰 저장 실패:", error);
+    }
+  } catch (e) {
+    console.error("토큰 등록 에러:", e);
+  }
+}
+
 async function registerForPushNotificationsAsync() {
   if (Platform.OS === 'web') return; 
 
   let token;
-  
-  // 1. 안드로이드 채널 설정 (우리가 고생해서 뚫은 부분!)
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync('default', {
-      name: '기본 알림', // 채널 이름 한글로 변경
+      name: '기본 알림',
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: '#FF231F7C',
     });
   }
 
-  // 2. 권한 확인
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   let finalStatus = existingStatus;
-  
   if (existingStatus !== 'granted') {
     const { status } = await Notifications.requestPermissionsAsync();
     finalStatus = status;
   }
-  
-  if (finalStatus !== 'granted') {
-    Alert.alert('알림 권한 필요', '설정에서 알림 권한을 허용해주세요!');
-    return;
-  }
+  if (finalStatus !== 'granted') return;
 
-  // 3. 토큰 가져오기
-  // EAS Project ID 자동 감지 (안전하게 처리)
   const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
-  
   try {
-    token = (await Notifications.getExpoPushTokenAsync({
-      projectId: projectId, 
-    })).data;
+    token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
   } catch (e) {
     console.error("토큰 발급 실패:", e);
   }
 
   return token;
 }
+
+const styles = StyleSheet.create({
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+});
