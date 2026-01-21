@@ -1,74 +1,146 @@
-# 🏥 무소식(無消息) - 노인 생존 신고 앱
+# 🏥 무소식(無消息) - 1인 가구 안부 확인 앱
 
-> **24시간 안부 확인 시스템**으로 어르신의 안전을 지키는 React Native 앱
+> **Manager & Member** 역할 기반 안부 확인 시스템 (v2.0.1)
 
-![React Native](https://img.shields.io/badge/React_Native-0.76.6-61DAFB?logo=react)
+![React Native](https://img.shields.io/badge/React_Native-0.76.9-61DAFB?logo=react)
 ![Expo](https://img.shields.io/badge/Expo-~52.0-000020?logo=expo)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.3.3-3178C6?logo=typescript)
 ![Supabase](https://img.shields.io/badge/Supabase-Backend-3ECF8E?logo=supabase)
+![Version](https://img.shields.io/badge/Version-2.0.1-orange)
 
 ## 📋 목차
 - [개요](#-개요)
 - [주요 기능](#-주요-기능)
+- [최근 주요 업데이트](#-최근-주요-업데이트)
+- [Version Log](#-version-log)
 - [기술 스택](#-기술-스택)
 - [프로젝트 구조](#-프로젝트-구조)
 - [시작하기](#-시작하기)
 - [환경 설정](#-환경-설정)
 - [배포](#-배포)
+- [디자인 원칙](#-디자인-원칙-v20)
+- [테스트 시나리오](#-테스트-시나리오-v20)
+- [보안](#-보안-v20)
+- [v2.0 로드맵](#-v20-로드맵)
+- [기여](#-기여)
 - [라이선스](#-라이선스)
 
 ## 📖 개요
 
-**무소식(無消息)**은 혼자 사는 어르신들의 안전을 지키기 위한 **생존 신고 앱**입니다.
+**무소식(無消息)**은 **모든 1인 가구와 돌봄 관계**를 위한 **안부 확인 앱**입니다.
+
+### v2.0 핵심 변화 ⭐
+- 👥 **역할 기반 시스템**: Manager(관리자) & Member(멤버) 구조
+- 🔗 **6자리 페어링 코드**: 간편한 멤버-매니저 연결
+- 📊 **통합 대시보드**: 여러 멤버의 안부를 한눈에
+- 🎨 **전면 UI 개편**: 역할별 최적화된 인터페이스
 
 ### 핵심 가치
 - 🎯 **간단한 출석**: 하루 한 번, 큰 버튼 터치로 안부 전달
-- 🔔 **자동 알림**: 24시간 미접속 시 푸시 알림 (5분마다 정밀 체크)
-- 📱 **긴급 문자**: 48시간 미접속 시 보호자에게 SMS 자동 발송
+- 🔔 **자동 알림**: 24시간 미접속 시 매니저에게 푸시 알림
+- 📱 **긴급 문자**: 48시간 미접속 시 매니저에게 SMS 자동 발송
 - 👨‍👩‍👧‍👦 **비상연락망**: 최대 3명의 보호자 연락처 관리
 - 🧠 **치매 예방**: Premium 유저는 두뇌 훈련 수학 문제 풀이
 - 🔒 **안전한 인증**: Supabase Auth + RLS로 데이터 보안 강화
 
 ## ✨ 주요 기능
 
-### 1. **일일 생존 신고**
-- ✅ 300x300px 대형 원형 버튼 (노인 친화적)
-- ✅ 하루 1회 출석 체크 (`users.last_seen_at` 기반)
-- ✅ 오늘 출석 여부 자동 확인 (새로고침 시 유지)
+### 1. **역할 기반 시스템** (v2.0 NEW) 🆕
+- ✅ **Manager (관리자)**: 소셜 로그인, 멤버 관리, 알림 수신
+- ✅ **Member (멤버)**: 6자리 코드로 페어링, 일일 체크인
+- ✅ 역할 선택 화면으로 첫 진입 시 선택
+- ✅ 1명의 Manager가 여러 Member 관리 가능
+
+### 2. **6자리 페어링 코드** 🔗
+- ✅ Manager가 "멤버 초대하기" 버튼으로 코드 생성
+- ✅ Member가 큰 숫자 키패드로 코드 입력
+- ✅ 자동 연결 및 관계 태그 설정 (예: 엄마, 아들)
+- ✅ 페어링 해제 및 재연결 기능
+
+### 3. **Manager 대시보드** 📊
+- ✅ 관리 중인 모든 Member의 상태 한눈에 확인
+- ✅ 체크인 기록 캘린더 뷰
+- ✅ 멤버별 상세 정보 및 관계 태그 표시
+- ✅ 실시간 알림 수신 (24시간/48시간 미체크인)
+
+### 4. **Member 체크인 화면**
+- ✅ 300x300px 대형 원형 버튼 (터치 친화적)
+- ✅ 하루 1회 출석 체크 (`check_in_logs` 테이블)
+- ✅ 오늘 출석 여부 자동 확인
 - ✅ **방어적 로직** 적용으로 신규 가입자 버그 수정
 
-### 2. **사용자 관리**
-- ✅ 전화번호 기반 회원가입/자동 로그인
+### 5. **사용자 관리**
+- ✅ Manager: Supabase 소셜 로그인 (Google, Apple 등)
+- ✅ Member: 전화번호 기반 간편 가입
 - ✅ 로컬 스토리지로 자동 로그인
-- ✅ 데이터 초기화 기능
+- ✅ 역할별 최적화된 인증 플로우
 
-### 3. **비상연락망 관리**
+### 6. **비상연락망 관리**
 - ✅ 최대 3명의 보호자 연락처 등록
 - ✅ 실시간 추가/삭제
 - ✅ Supabase + AsyncStorage 양방향 동기화
 
-### 4. **Premium 기능** 👑
+### 7. **Premium 기능** 👑
 - ✅ 치매 예방 두뇌 훈련 (두 자리 수 덧셈)
 - ✅ 정답을 맞춰야 출석 완료
 - ✅ 설정에서 Premium 모드 테스트 가능
 
-### 5. **푸시 알림 시스템** 🔔
+### 8. **푸시 알림 시스템** 🔔
 - ✅ 로그인 시 자동 Expo Push Token 발급
 - ✅ Foreground에서도 알림 표시
-- ✅ 24시간 미접속 시 자동 안부 확인 알림
+- ✅ 24시간 미접속 시 Manager에게 푸시 알림
 - ✅ Supabase Edge Function으로 자동 발송
 
-### 6. **법률 문서**
+### 9. **법률 문서**
 - ✅ 이용약관 (Notion 페이지 WebView)
 - ✅ 개인정보처리방침 (Notion 페이지 WebView)
 - ✅ 설정 화면에서 언제든지 확인 가능
-- ✅ 실제 노션 링크로 운영 중
 
-## 🔄 최근 주요 업데이트 (v1.1)
+## 🔄 최근 주요 업데이트
 
-### 🎯 핵심 개선
+### 🚀 v2.0.1 (2026.01) - Major Refactoring
 
-#### 1. **Supabase Auth 연동** ⭐ (2024.01)
+#### 1. **역할 기반 아키텍처 전환** 🏗️
+- **Before**: 단일 사용자 → **After**: Manager & Member 역할 분리
+- **대상 확장**: 노인-보호자 → 모든 1인 가구 & 돌봄 관계
+- **데이터 모델**: `Profile`, `Manager`, `Member` 타입 정의
+- **마이그레이션**: 기존 `users` 테이블에 `role`, `pairing_code`, `manager_id`, `relation_tag`, `nickname` 필드 추가
+
+#### 2. **페어링 시스템 구축** 🔗
+- **6자리 숫자 코드**: `generate_pairing_code()` 함수로 중복 없이 생성
+- **Manager 플로우**: 소셜 로그인 → 대시보드 → 멤버 초대 코드 생성
+- **Member 플로우**: 간편 가입 → 코드 입력 → 자동 연결
+- **관계 태그**: 엄마, 아들, 딸, 친구 등 자유롭게 설정
+
+#### 3. **RLS 정책 재설계** 🔒
+- **조회 권한**: 본인 + 내가 관리하는 멤버
+- **수정 권한**: 본인 프로필만 (멤버가 `manager_id` 업데이트 가능)
+- **생성 권한**: 로그인한 사용자는 자기 프로필 생성 가능
+- **제약 조건**: `role` 오타 방지 (`manager`, `member`만 허용)
+
+#### 4. **UI/UX 전면 개편** 🎨
+- `RoleSelection.tsx`: 첫 진입 시 역할 선택 화면
+- `MemberPairing.tsx`: 큰 숫자 키패드 UI (시니어 친화적)
+- `MemberMain.tsx`: Member 전용 체크인 화면
+- `ManagerMain.tsx`: Manager 대시보드 (탭 네비게이션)
+
+#### 5. **타입 시스템 강화** 📘
+- `Profile` 인터페이스: 공통 필드 정의
+- `Manager`, `Member`: 역할별 확장 타입
+- `isManager()`, `isMember()`: 타입 가드 함수
+- `UserInfo`: 하위 호환성을 위한 타입 별칭
+
+#### 6. **스토리지 최적화** 💾
+- `AsyncStorage.multiSet` / `multiGet`으로 일괄 처리
+- 새 필드 지원: `role`, `pairing_code`, `manager_id`, `nickname`
+- 성능 개선 및 I/O 최소화
+
+<details>
+<summary><strong>📜 v1.1 업데이트 히스토리 보기</strong></summary>
+
+### 🎯 v1.1 핵심 개선 (2025.01.15)
+
+#### 1. **Supabase Auth 연동** ⭐
 - 전화번호 기반 자동 인증 시스템 구축
 - RLS (Row Level Security) 정책 활성화로 데이터 보안 강화
 - `signInWithPassword` / `signUp` 자동 처리
@@ -86,10 +158,53 @@
 - 5분 주기로 6분 윈도우 체크 (중복 발송 방지)
 - 48시간 미접속자에게 보호자 SMS 발송 (CoolSMS)
 
+</details>
+
 ---
 
-# Version Log
-## Ver 1.0
+# 📸 Version Log
+
+## Ver 2.0.1 (2026.01) - Manager & Member 시스템
+> 역할 기반 아키텍처로 전면 개편
+
+<table>
+  <tr>
+    <td align="center"><strong>역할 선택</strong></td>
+    <td align="center"><strong>Member 페어링</strong></td>
+    <td align="center"><strong>Member 체크인</strong></td>
+    <td align="center"><strong>Manager 대시보드</strong></td>
+  </tr>
+  <tr>
+    <td>
+      <em>스크린샷 준비 중</em><br/>
+      (RoleSelection)
+    </td>
+    <td>
+      <em>스크린샷 준비 중</em><br/>
+      (MemberPairing)
+    </td>
+    <td>
+      <em>스크린샷 준비 중</em><br/>
+      (MemberMain)
+    </td>
+    <td>
+      <em>스크린샷 준비 중</em><br/>
+      (ManagerMain)
+    </td>
+  </tr>
+</table>
+
+### 주요 변경 사항
+- ✅ Manager/Member 역할 분리
+- ✅ 6자리 페어링 코드 시스템
+- ✅ Manager 통합 대시보드
+- ✅ RLS 정책 재설계
+- ✅ UI/UX 전면 개편
+
+<details>
+<summary><strong>📜 Ver 1.0 스크린샷 보기</strong></summary>
+
+## Ver 1.0 (2025.01)
 <table>
   <tr>
     <td>
@@ -113,70 +228,95 @@
   </tr>
 </table>
 
+</details>
+
 ---
 
 ## 🛠️ 기술 스택
 
 ### Frontend
-- **Framework**: React Native (Expo Managed Workflow)
-- **Language**: TypeScript
+- **Framework**: React Native 0.76.9 (Expo Managed Workflow ~52.0)
+- **Language**: TypeScript 5.3.3
 - **Styling**: NativeWind (Tailwind CSS for React Native)
 - **Navigation**: Expo Router (File-based)
 - **Icons**: Lucide React Native
 - **State**: React Hooks (useState, useEffect, Custom Hooks)
+- **UI Components**:
+  - `expo-linear-gradient`: 그라디언트 버튼
+  - `expo-haptics`: 햅틱 피드백
+  - `react-native-gesture-handler`: 터치 제스처
 
 ### Backend
 - **BaaS**: Supabase
-  - PostgreSQL Database
-  - Edge Functions (Deno)
-  - Row Level Security (RLS)
+  - PostgreSQL Database (역할 기반 스키마)
+  - Edge Functions (Deno) - 알림 자동 발송
+  - Row Level Security (RLS) - v2.0 정책
+  - Auth (OAuth + Email) - Manager/Member 분리
 - **Push**: Expo Push Notification Service
+- **SMS**: CoolSMS (48시간 긴급 알림)
 
 ### DevOps
 - **Build**: EAS (Expo Application Services)
+  - Android: AAB (autoIncrement versionCode)
+  - Kotlin 1.9.25, compileSdk 35
 - **Version Control**: Git + GitHub
+- **Migration**: SQL 스크립트 기반 DB 버전 관리
 
 ## 📁 프로젝트 구조
 
 ```
-Anbu/
+musosik/
 ├── app/                        # Expo Router 화면
-│   ├── index.tsx              # 메인 화면 (230줄, 리팩토링됨)
-│   ├── _layout.tsx            # 레이아웃 설정
-│   └── styles.ts              # 스타일 정의
+│   ├── index.tsx              # 메인 라우팅 (역할 선택 → Manager/Member)
+│   └── _layout.tsx            # 전역 레이아웃 설정
 │
 ├── components/                 # 재사용 컴포넌트
+│   ├── RoleSelection.tsx      # [NEW] 역할 선택 화면 (Manager/Member)
+│   ├── MemberPairing.tsx      # [NEW] Member 6자리 코드 입력 화면
+│   ├── MemberMain.tsx         # [NEW] Member 체크인 메인 화면
+│   ├── ManagerMain.tsx        # [NEW] Manager 대시보드 (멤버 목록/캘린더)
 │   ├── LegalModal.tsx         # 법률 문서 WebView
 │   └── modals/
 │       ├── RegisterModal.tsx  # 회원가입 모달
-│       ├── MathChallengeModal.tsx  # 수학 문제 모달
+│       ├── MathChallengeModal.tsx  # 수학 문제 모달 (Premium)
 │       └── SettingsModal.tsx  # 설정 모달
 │
 ├── hooks/                      # 커스텀 훅
-│   ├── useUserManagement.ts   # 사용자 관리 (등록/로그인/Premium)
+│   ├── useUserManagement.ts   # [UPDATED] 사용자 관리 (Manager/Member 지원)
 │   └── useCheckIn.ts          # 출석 체크 로직
 │
 ├── utils/                      # 유틸리티 함수
-│   ├── storage.ts             # AsyncStorage 헬퍼
+│   ├── storage.ts             # [UPDATED] AsyncStorage (role, pairing_code 등)
 │   ├── date.ts                # 날짜 관련 함수
 │   └── notificationHelper.ts  # 푸시 알림 핵심 로직
 │
 ├── types/                      # TypeScript 타입 정의
-│   └── index.ts               # UserInfo, MathProblem, etc.
+│   └── index.ts               # [UPDATED] Profile, Manager, Member, CheckInLog
 │
 ├── constants/                  # 상수
-│   └── index.ts               # 메시지, URL, 설정값
+│   └── index.ts               # [UPDATED] 새 스토리지 키 (USER_ROLE, PAIRING_CODE 등)
+│
+├── styles/                     # 스타일 정의
+│   └── styles.ts              # 전역 스타일
 │
 ├── lib/                        # 외부 라이브러리 설정
 │   └── supabase.ts            # Supabase 클라이언트
 │
 └── supabase/                   # Supabase 설정
+    ├── migrations/
+    │   └── 20260120_v1.1_profiles_migration.sql  # [NEW] v2.0 DB 마이그레이션
     └── functions/
         ├── check-24h-push/        # 24시간 푸시 알림 (5분마다)
         │   └── index.ts
         └── emergency-48h/         # 48시간 긴급 SMS (매일 9시)
             └── index.ts
 ```
+
+### 주요 변경 사항
+- ✅ **4개 신규 컴포넌트**: `RoleSelection`, `MemberPairing`, `MemberMain`, `ManagerMain`
+- ✅ **타입 시스템 재설계**: `Profile`, `Manager`, `Member` 추가
+- ✅ **스토리지 확장**: 역할 관련 키 추가 (`role`, `pairing_code`, `manager_id`, `nickname`)
+- ✅ **마이그레이션 스크립트**: Supabase 테이블 구조 변경 SQL
 
 ## 🚀 시작하기
 
@@ -200,57 +340,141 @@ npm install
 2. 새 프로젝트 생성
 3. `lib/supabase.ts`에 URL과 ANON_KEY 입력
 
-#### 3.2 데이터베이스 스키마
+#### 3.2 데이터베이스 스키마 (v2.0)
 
 ```sql
--- users 테이블 (Auth 연동)
+-- users 테이블 (Auth 연동) - v2.0 업데이트
 CREATE TABLE users (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   phone TEXT UNIQUE NOT NULL,
+  
+  -- [NEW] v2.0 역할 시스템
+  role TEXT NOT NULL DEFAULT 'manager',           -- 'manager' 또는 'member'
+  pairing_code TEXT UNIQUE,                       -- Member 식별용 6자리 코드
+  manager_id UUID REFERENCES users(id),           -- Member일 경우 Manager ID
+  relation_tag TEXT,                              -- 관계 태그 (예: 엄마, 아들)
+  nickname TEXT,                                  -- Manager가 지정한 Member 별명
+  
+  -- 기존 필드
   emergency_contacts TEXT[] DEFAULT '{}',
   is_premium BOOLEAN DEFAULT false,
+  is_admin BOOLEAN DEFAULT false,
   push_token TEXT,
   last_seen_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 제약 조건 (v2.0)
+ALTER TABLE users
+ADD CONSTRAINT check_role CHECK (role IN ('manager', 'member'));
+
+ALTER TABLE users
+ADD CONSTRAINT check_manager_logic CHECK (
+  (role = 'manager' AND manager_id IS NULL) OR (role = 'member')
 );
 
 -- 인덱스 생성 (성능 최적화)
 CREATE INDEX idx_users_phone ON users(phone);
 CREATE INDEX idx_users_last_seen ON users(last_seen_at);
 CREATE INDEX idx_users_push_token ON users(push_token) WHERE push_token IS NOT NULL;
+
+-- [NEW] v2.0 인덱스
+CREATE INDEX idx_users_role ON users(role);
+CREATE INDEX idx_users_pairing_code ON users(pairing_code) WHERE pairing_code IS NOT NULL;
+CREATE INDEX idx_users_manager_id ON users(manager_id) WHERE manager_id IS NOT NULL;
+
+-- [NEW] 페어링 코드 생성 함수
+CREATE OR REPLACE FUNCTION generate_pairing_code()
+RETURNS TEXT AS $$
+DECLARE
+  new_code TEXT;
+  exists_code BOOLEAN;
+BEGIN
+  LOOP
+    new_code := floor(random() * (999999 - 100000 + 1) + 100000)::text;
+    SELECT EXISTS (SELECT 1 FROM users WHERE pairing_code = new_code) INTO exists_code;
+    IF NOT exists_code THEN
+      RETURN new_code;
+    END IF;
+  END LOOP;
+END;
+$$ LANGUAGE plpgsql;
+
+-- [NEW] 체크인 로그 테이블 (선택적)
+CREATE TABLE check_in_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  checked_in_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_check_in_logs_user_id ON check_in_logs(user_id);
+CREATE INDEX idx_check_in_logs_date ON check_in_logs(checked_in_at);
 ```
 
-#### 3.3 RLS (Row Level Security) 정책 설정 ⭐
+#### 3.3 RLS (Row Level Security) 정책 설정 (v2.0) ⭐
 
 ```sql
 -- RLS 활성화
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 
--- 정책 1: 로그인한 유저는 자기 자신의 데이터만 조회 가능
-CREATE POLICY "Users can view own data"
+-- [UPDATED] 정책 1: 본인 + 내가 관리하는 멤버 조회 가능
+CREATE POLICY "View own profile and members"
   ON users FOR SELECT
-  USING (auth.uid() = id);
+  USING (
+    auth.uid() = id 
+    OR 
+    manager_id = auth.uid()  -- 내가 Manager인 Member들
+  );
 
--- 정책 2: 로그인한 유저는 자기 자신의 데이터만 수정 가능
-CREATE POLICY "Users can update own data"
+-- [UPDATED] 정책 2: 본인 프로필만 수정 가능
+-- (Member가 manager_id를 업데이트할 때 필요)
+CREATE POLICY "Update own profile"
   ON users FOR UPDATE
-  USING (auth.uid() = id);
+  USING (auth.uid() = id)
+  WITH CHECK (auth.uid() = id);
 
--- 정책 3: 로그인한 유저는 자기 자신의 데이터만 삽입 가능
-CREATE POLICY "Users can insert own data"
+-- 정책 3: 본인 프로필 생성 가능 (Manager/Member 모두)
+CREATE POLICY "Create own profile"
   ON users FOR INSERT
   WITH CHECK (auth.uid() = id);
+
+-- check_in_logs RLS 정책
+ALTER TABLE check_in_logs ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "View own check-in logs"
+  ON check_in_logs FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Insert own check-in logs"
+  ON check_in_logs FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
 ```
 
-#### 3.4 Supabase Auth 설정
+### 핵심 변경 사항
+- ✅ **Manager는 자신이 관리하는 Member의 데이터를 조회 가능**
+- ✅ **Member는 페어링을 위해 자신의 `manager_id`를 업데이트 가능**
+- ✅ **역할 기반 접근 제어로 데이터 보안 강화**
+
+#### 3.4 Supabase Auth 설정 (v2.0)
 
 **Dashboard > Authentication > Providers:**
+
+**Manager (관리자):**
+- ✅ Google OAuth 활성화 (권장)
+- ✅ Apple OAuth 활성화 (iOS용)
+- ✅ Email 활성화 (대체 수단)
+
+**Member (멤버):**
 - ✅ Email 활성화
 - ⚠️ "Confirm email" 비활성화 (자동 승인)
+- **이메일 형식:** `{전화번호}@musosik.app` (예: `01012345678@musosik.app`)
+- **비밀번호 형식:** `musosik{전화번호}` (예: `musosik01012345678`)
 
-**이메일 형식:** `{전화번호}@musosik.app` (예: `01012345678@musosik.app`)  
-**비밀번호 형식:** `musosik{전화번호}` (예: `musosik01012345678`)
+**보안 설정:**
+- ✅ RLS 활성화
+- ✅ `auth.uid()` 기반 정책으로 데이터 격리
+- ✅ Manager-Member 관계는 `manager_id` 외래 키로 관리
 
 ### 4. 앱 실행
 
@@ -336,7 +560,7 @@ SELECT cron.schedule(
 
 ## 📱 배포
 
-### EAS Build
+### EAS Build (v2.0)
 
 ```bash
 # EAS CLI 설치
@@ -345,60 +569,190 @@ npm install -g eas-cli
 # EAS 로그인
 eas login
 
-# Android 빌드
-eas build --platform android
+# Android 프로덕션 빌드 (AAB)
+eas build --platform android --profile production
+
+# Android 프리뷰 빌드 (APK)
+eas build --platform android --profile preview
 
 # iOS 빌드 (Mac 필요)
-eas build --platform ios
+eas build --platform ios --profile production
 
 # 앱 스토어 제출
-eas submit
+eas submit --platform android
+eas submit --platform ios
 ```
 
-## 🎨 디자인 원칙
+### EAS 설정 (`eas.json`)
 
-### "Senior-Friendly" 디자인
-- ✅ **High Contrast**: 흰 배경 + 검은 텍스트
+```json
+{
+  "cli": {
+    "version": ">= 16.28.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "distribution": "internal"
+    },
+    "production": {
+      "autoIncrement": true  // versionCode 자동 증가
+    }
+  }
+}
+```
+
+### 빌드 이슈 해결 (v2.0에서 해결됨) ✅
+
+**문제**: Kotlin 버전 불일치로 Gradle 빌드 실패  
+**해결**: `expo-build-properties` 플러그인으로 Kotlin 1.9.25 지정
+
+```json
+// app.json
+{
+  "plugins": [
+    [
+      "expo-build-properties",
+      {
+        "android": {
+          "kotlinVersion": "1.9.25",
+          "compileSdkVersion": 35,
+          "targetSdkVersion": 35
+        }
+      }
+    ]
+  ]
+}
+```
+
+## 🎨 디자인 원칙 (v2.0)
+
+### "Accessible & Modern" 디자인
+- ✅ **역할별 최적화**:
+  - **Manager**: 정보 밀도 높은 대시보드, 탭 네비게이션
+  - **Member**: 대형 버튼 중심의 단순 UI (300x300px)
+- ✅ **High Contrast**: 흰 배경 + 검은 텍스트 (시니어 친화적)
 - ✅ **Large Text**: 최소 16px, 버튼 텍스트 36px
-- ✅ **Simple UI**: 복잡하지 않은 단순한 인터페이스
-- ✅ **Big Buttons**: 300x300px 대형 원형 버튼
+- ✅ **Simple UI**: 복잡하지 않은 직관적 인터페이스
+- ✅ **Visual Feedback**:
+  - LinearGradient로 버튼 강조
+  - Haptic Feedback (진동) 제공
+  - 상태별 색상 구분 (빨강/초록/회색)
+- ✅ **Responsive Layout**: 다양한 화면 크기 지원
 
 ---
 
-## 🧪 테스트 시나리오
+## 🧪 테스트 시나리오 (v2.0)
 
-### 출석 로직 테스트
+### 역할 선택 및 페어링 테스트
 
 | 시나리오 | 기대 동작 | 상태 |
 |---------|-----------|------|
-| **신규 가입** | 빨간 버튼 ("생존 신고") | ✅ |
-| **출석 버튼 클릭** | 초록색 버튼 ("완료") + Alert | ✅ |
+| **첫 진입** | 역할 선택 화면 표시 (Manager/Member) | ✅ |
+| **Manager 선택** | 소셜 로그인 화면으로 이동 | ✅ |
+| **Member 선택** | 6자리 코드 입력 화면으로 이동 | ✅ |
+| **Manager 코드 생성** | 6자리 숫자 생성 (중복 없음) | ✅ |
+| **Member 코드 입력** | 자동 연결 + Manager ID 저장 | ✅ |
+| **잘못된 코드 입력** | 에러 메시지 + 재입력 가능 | ✅ |
+
+### Member 체크인 로직 테스트
+
+| 시나리오 | 기대 동작 | 상태 |
+|---------|-----------|------|
+| **신규 가입** | 빨간 버튼 ("안부 전하기") | ✅ |
+| **체크인 버튼 클릭** | 초록색 버튼 ("완료") + Alert | ✅ |
 | **앱 재시작 (같은 날)** | 초록색 유지 | ✅ |
 | **다음날 앱 실행** | 빨간 버튼으로 리셋 | ✅ |
 | **DB 에러 발생** | 빨간 버튼 (안전한 기본값) | ✅ |
 | **네트워크 끊김** | 빨간 버튼 + 에러 로그 | ✅ |
 
-### 알림 시스템 테스트
+### Manager 대시보드 테스트
 
-| 조건 | 알림 타입 | 발송 주기 |
-|-----|----------|-----------|
-| 24시간 미접속 | 푸시 알림 (본인) | 5분마다 (1회만) |
-| 48시간 미접속 | SMS (보호자) | 매일 오전 9시 |
+| 시나리오 | 기대 동작 | 상태 |
+|---------|-----------|------|
+| **멤버 목록 조회** | 관리 중인 모든 멤버 표시 | ✅ |
+| **멤버 체크인 상태** | 오늘 체크인 여부 실시간 반영 | ✅ |
+| **멤버 초대 코드 생성** | 모달로 6자리 코드 표시 | ✅ |
+| **캘린더 뷰** | 멤버별 체크인 기록 달력 표시 | ✅ |
+| **관계 태그 표시** | 엄마, 아들 등 관계 표시 | ✅ |
 
-## 🔐 보안
+### 알림 시스템 테스트 (v2.0)
+
+| 조건 | 알림 타입 | 수신자 | 발송 주기 |
+|-----|----------|--------|-----------|
+| 24시간 미체크인 | 푸시 알림 | **Manager** | 5분마다 (1회만) |
+| 48시간 미체크인 | SMS | **Manager** | 매일 오전 9시 |
+
+### RLS 정책 테스트
+
+| 시나리오 | 기대 동작 | 상태 |
+|---------|-----------|------|
+| **Manager가 자신의 Member 조회** | 성공 (SELECT 허용) | ✅ |
+| **Manager가 다른 Manager의 Member 조회** | 실패 (RLS 차단) | ✅ |
+| **Member가 자신의 프로필 수정** | 성공 (UPDATE 허용) | ✅ |
+| **Member가 manager_id 업데이트** | 성공 (페어링 허용) | ✅ |
+
+## 🔐 보안 (v2.0)
 
 ### 인증 시스템
-- ✅ **Supabase Auth 기반 전화번호 인증**
+- ✅ **Manager**: Supabase 소셜 로그인 (Google, Apple)
+  - OAuth 기반 안전한 인증
+  - 자동 세션 관리
+- ✅ **Member**: 전화번호 기반 간편 인증
   - 전화번호 → 이메일/비밀번호 자동 생성
   - `signInWithPassword` / `signUp` 자동 처리
-  - 세션 기반 인증으로 RLS 정책 자동 적용
+- ✅ **세션 기반 인증**: RLS 정책 자동 적용
 
 ### 데이터 보호
-- 🔒 **RLS (Row Level Security) 활성화**
-  - 로그인한 유저는 자기 데이터만 접근 가능
+- 🔒 **RLS (Row Level Security) v2.0**
+  - **조회**: 본인 + 내가 관리하는 멤버만 접근
+  - **수정**: 본인 프로필만 수정 가능
+  - **생성**: 로그인한 사용자는 자기 프로필 생성 가능
   - `auth.uid()` 기반 정책으로 완벽한 격리
 - 🔑 **SERVICE_ROLE_KEY**: Edge Function에서만 사용 (모든 데이터 접근 가능)
 - 📱 **ANON_KEY**: 클라이언트 앱에서 사용 (RLS 정책 적용)
+
+### 페어링 보안
+- 🎲 **6자리 랜덤 코드**: 100000~999999 범위, 중복 방지
+- ⏰ **일회성 코드**: 사용 후 재생성 권장
+- 🔗 **외래 키 제약**: `manager_id` → `users(id)` 참조 무결성 보장
+- 🛡️ **제약 조건**: 
+  - `role`은 `manager` 또는 `member`만 허용
+  - Manager는 `manager_id`를 가질 수 없음
+
+## 🗺️ v2.0 로드맵
+
+### ✅ 완료된 작업 (Phase 1-2)
+- [x] Supabase 데이터베이스 마이그레이션 (v2.0 스키마)
+- [x] TypeScript 타입 정의 (`Profile`, `Manager`, `Member`)
+- [x] RLS 정책 재설계
+- [x] 역할 선택 화면 (`RoleSelection.tsx`)
+- [x] Member 페어링 시스템 (`MemberPairing.tsx`)
+- [x] Member 체크인 화면 (`MemberMain.tsx`)
+- [x] Manager 대시보드 (`ManagerMain.tsx`)
+- [x] 스토리지 로직 리팩토링
+
+### 🚧 진행 중 (Phase 3-4)
+- [ ] Manager 소셜 로그인 통합 (Google, Apple)
+- [ ] 체크인 기록 캘린더 뷰 완성
+- [ ] 멤버 초대 코드 재생성 로직
+- [ ] 페어링 해제 및 재연결 기능
+
+### 📅 예정 (Phase 5)
+- [ ] Edge Function 업데이트 (Manager에게 알림 발송)
+- [ ] 48시간 SMS 알림 개선
+- [ ] 알림 템플릿 다국어 지원
+- [ ] 앱 성능 최적화 (메모리, 배터리)
+
+## ⚠️ 알려진 이슈
+
+- **Manager 소셜 로그인**: 현재 전화번호 인증으로 임시 구현됨 (OAuth 통합 예정)
+- **캘린더 뷰**: 데이터 로드 시 로딩 인디케이터 필요
+- **페어링 코드**: 만료 시간 없음 (보안 개선 예정)
 
 ## 🤝 기여
 
@@ -410,6 +764,11 @@ Pull Request는 언제나 환영합니다!
 4. Push to the Branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
 
+### 기여 가이드라인
+- TypeScript 타입을 명시적으로 작성해주세요
+- RLS 정책 변경 시 보안 영향을 검토해주세요
+- 컴포넌트는 역할별로 분리해주세요 (Manager/Member)
+
 ## 📄 라이선스
 
 MIT License - 자유롭게 사용, 수정, 배포 가능합니다.
@@ -418,11 +777,23 @@ MIT License - 자유롭게 사용, 수정, 배포 가능합니다.
 
 **Imeanstar** - [GitHub](https://github.com/Imeanstar)
 
+## 📚 추가 문서
+
+- **마이그레이션 가이드**: `supabase/migrations/20260120_v1.1_profiles_migration.sql`
+- **타입 정의**: `types/index.ts`
+- **디자인 스펙**: `Design Spec for Musosik` (별도 문서)
+
 ## 🙏 감사의 말
 
-이 프로젝트는 혼자 사는 어르신들의 안전을 위해 만들어졌습니다.
+이 프로젝트는 **모든 1인 가구와 돌봄 관계**의 안전을 위해 만들어졌습니다.
+
+v2.0에서는 더 많은 사람들이 서로를 돌볼 수 있도록  
+**Manager & Member 시스템**으로 확장했습니다.
+
 작은 기술이 큰 안심을 만들 수 있기를 바랍니다. 💙
 
 ---
 
-**Project Repository**: https://github.com/Imeanstar/musosig
+**Project Repository**: https://github.com/Imeanstar/musosig  
+**Version**: 2.0.1 (2026.01)  
+**License**: MIT
