@@ -4,9 +4,11 @@ import {
   Dimensions, ActivityIndicator, Modal, RefreshControl, Alert 
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { ChevronLeft, ChevronRight, Plus, Settings, User, Bell, LogOut, RefreshCw, X, ArrowRight } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, Plus, Settings, User, Bell, LogOut, RefreshCw, X, ArrowRight, Copy } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { UserInfo } from '../types';
+// 👇 [추가] 클립보드 기능 임포트
+import * as Clipboard from 'expo-clipboard';
 
 interface ManagerMainProps {
   onBack: () => void;
@@ -33,11 +35,14 @@ export function ManagerMain({ onBack, userInfo }: ManagerMainProps) {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteCode, setInviteCode] = useState<string>('');
   const [isCodeLoading, setIsCodeLoading] = useState(false);
+  
+  // 👇 [추가] 복사 알림 상태
+  const [isCopied, setIsCopied] = useState(false);
 
-  // 👇 초대 정보 입력 상태
-  const [targetNickname, setTargetNickname] = useState(''); // 예: 엄마
-  const [targetRelation, setTargetRelation] = useState(''); // 예: 부모님
-  const [step, setStep] = useState<'input' | 'show'>('input'); // 모달 단계 (입력 -> 확인)
+  // 초대 정보 입력 상태
+  const [targetNickname, setTargetNickname] = useState('');
+  const [targetRelation, setTargetRelation] = useState('');
+  const [step, setStep] = useState<'input' | 'show'>('input');
 
   useEffect(() => {
     if (userInfo) fetchMembers();
@@ -47,11 +52,20 @@ export function ManagerMain({ onBack, userInfo }: ManagerMainProps) {
     if (selectedMember) fetchCheckInLogs(selectedMember.id);
   }, [selectedMember, currentDate]);
 
-  // 🔥 코드 생성 함수 (제출 버튼 누를 때 실행)
+  // 🔥 [추가] 클립보드 복사 함수
+  const handleCopyCode = async () => {
+    if (!inviteCode) return;
+    await Clipboard.setStringAsync(inviteCode);
+    setIsCopied(true);
+    
+    // 2초 뒤에 알림 문구 사라지게
+    setTimeout(() => {
+      setIsCopied(false);
+    }, 2000);
+  };
+
   const generateNewCode = async () => {
     if (!userInfo) return;
-    
-    // 유효성 검사 (입력 단계일 때만 체크)
     if (step === 'input' && (!targetNickname.trim() || !targetRelation.trim())) {
       Alert.alert('정보 부족', '호칭과 관계를 모두 입력해주세요.');
       return;
@@ -61,24 +75,22 @@ export function ManagerMain({ onBack, userInfo }: ManagerMainProps) {
 
     try {
       const newCode = Math.floor(100000 + Math.random() * 900000).toString();
-      
-      // ⏰ 유효기간: 현재시간 + 10분
       const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
 
       const { error } = await supabase
         .from('users')
         .update({ 
           pairing_code: newCode,
-          pairing_code_expires_at: expiresAt, // 만료 시간
-          pending_member_nickname: targetNickname, // 멤버에게 줄 호칭
-          pending_member_relation: targetRelation  // 관계
+          pairing_code_expires_at: expiresAt,
+          pending_member_nickname: targetNickname,
+          pending_member_relation: targetRelation
         })
         .eq('id', userInfo.id);
 
       if (error) throw error;
 
       setInviteCode(newCode);
-      setStep('show'); // 2단계(코드 보여주기)로 이동
+      setStep('show');
     } catch (e) {
       console.error(e);
       Alert.alert('오류', '코드를 생성하지 못했습니다.');
@@ -87,12 +99,41 @@ export function ManagerMain({ onBack, userInfo }: ManagerMainProps) {
     }
   };
 
-  // 모달 열기 (초기화)
+  // 기기 재연결 코드 생성 함수 (RPC 호출)
+  const generateReLinkCode = async () => {
+    if (!selectedMember) return;
+    setIsCodeLoading(true);
+    try {
+      const newCode = Math.floor(100000 + Math.random() * 900000).toString();
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+  
+      // 1. RPC 함수 호출
+      const { error } = await supabase.rpc('generate_relink_code', {
+        target_member_id: selectedMember.id,
+        new_code: newCode,
+        expires_at: expiresAt
+      });
+  
+      if (error) throw error;
+  
+      setInviteCode(newCode);
+      setStep('show'); 
+      setShowInviteModal(true);
+      
+    } catch (e: any) {
+      console.error(e);
+      Alert.alert("오류", "코드를 생성하지 못했습니다. (권한 오류 등)");
+    } finally {
+      setIsCodeLoading(false);
+    }
+  };
+
   const handleOpenInvite = () => {
-    setStep('input'); // 항상 입력창부터 시작
+    setStep('input');
     setTargetNickname('');
     setTargetRelation('');
     setShowInviteModal(true);
+    setIsCopied(false); // 초기화
   };
 
   const fetchMembers = async () => {
@@ -170,36 +211,6 @@ export function ManagerMain({ onBack, userInfo }: ManagerMainProps) {
     const newDate = new Date(currentDate);
     newDate.setMonth(newDate.getMonth() + delta);
     setCurrentDate(newDate);
-  };
-
-  // 🔥 [수정됨] 기기 재연결 코드 생성 함수
-  const generateReLinkCode = async () => {
-    if (!selectedMember) return;
-    setIsCodeLoading(true);
-    try {
-      const newCode = Math.floor(100000 + Math.random() * 900000).toString();
-      const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-  
-      // 1. RPC 함수 호출 (권한 문제 해결!)
-      const { error } = await supabase.rpc('generate_relink_code', {
-        target_member_id: selectedMember.id,
-        new_code: newCode,
-        expires_at: expiresAt
-      });
-  
-      if (error) throw error;
-  
-      // 2. 성공 시 모달 띄우기
-      setInviteCode(newCode);
-      setStep('show'); 
-      setShowInviteModal(true);
-      
-    } catch (e: any) {
-      console.error(e);
-      Alert.alert("오류", "코드를 생성하지 못했습니다. (권한 오류 등)");
-    } finally {
-      setIsCodeLoading(false);
-    }
   };
 
   return (
@@ -311,22 +322,22 @@ export function ManagerMain({ onBack, userInfo }: ManagerMainProps) {
               </View>
             </View>
 
-            {/* 👇 [추가] 기기 재연결 섹션 */}
-                <View style={styles.relinkCard}>
-                <Text style={styles.relinkTitle}>기기 변경 / 재설치</Text>
-                <Text style={styles.relinkDesc}>
-                    멤버가 앱을 삭제했거나 기기를 바꿨나요?{'\n'}
-                    아래 버튼을 눌러 연결 코드를 다시 발급해주세요.{'\n'}
-                    (기존 기록이 유지됩니다)
-                </Text>
-                <TouchableOpacity 
-                    style={styles.relinkButton} 
-                    onPress={generateReLinkCode}
-                >
-                    <RefreshCw size={20} color="white" style={{ marginRight: 8 }} />
-                    <Text style={styles.relinkButtonText}>재연결 코드 발급</Text>
-                </TouchableOpacity>
-                </View>
+            {/* 기기 재연결 섹션 */}
+            <View style={styles.relinkCard}>
+              <Text style={styles.relinkTitle}>기기 변경 / 재설치</Text>
+              <Text style={styles.relinkDesc}>
+                멤버가 앱을 삭제했거나 기기를 바꿨나요?{'\n'}
+                아래 버튼을 눌러 연결 코드를 다시 발급해주세요.{'\n'}
+                (기존 기록이 유지됩니다)
+              </Text>
+              <TouchableOpacity 
+                style={styles.relinkButton} 
+                onPress={generateReLinkCode}
+              >
+                <RefreshCw size={20} color="white" style={{ marginRight: 8 }} />
+                <Text style={styles.relinkButtonText}>재연결 코드 발급</Text>
+              </TouchableOpacity>
+            </View>
           </ScrollView>
         )}
 
@@ -369,7 +380,7 @@ export function ManagerMain({ onBack, userInfo }: ManagerMainProps) {
         </TouchableOpacity>
       </View>
 
-      {/* 🔥 [수정된 모달] 2단계 방식 적용 */}
+      {/* 모달 */}
       <Modal visible={showInviteModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -382,7 +393,7 @@ export function ManagerMain({ onBack, userInfo }: ManagerMainProps) {
 
             <Text style={styles.modalTitle}>멤버 초대하기</Text>
 
-            {/* Step 1: 정보 입력 단계 */}
+            {/* Step 1: 정보 입력 */}
             {step === 'input' && (
               <View style={{ width: '100%' }}>
                 <Text style={styles.modalDesc}>
@@ -409,7 +420,6 @@ export function ManagerMain({ onBack, userInfo }: ManagerMainProps) {
                   />
                 </View>
 
-                {/* 초대 코드 만들기 버튼 */}
                 <TouchableOpacity 
                   style={styles.generateButton}
                   onPress={generateNewCode}
@@ -427,24 +437,36 @@ export function ManagerMain({ onBack, userInfo }: ManagerMainProps) {
               </View>
             )}
 
-            {/* Step 2: 코드 확인 단계 */}
+            {/* Step 2: 코드 확인 (여기가 복사 기능 핵심!) */}
             {step === 'show' && (
               <View style={{ width: '100%', alignItems: 'center' }}>
                 <Text style={styles.modalDesc}>
-                  멤버 앱(무소식)에서 아래 숫자를 입력하면{'\n'}즉시 연결됩니다.
+                  숫자 칸을 눌러 코드를 복사하고{'\n'}가족에게 전달해주세요.
                 </Text>
                 
                 <View style={styles.codeRow}>
-                   <View style={styles.codeBox}>
+                   {/* 👇 [수정] 코드를 누르면 복사되도록 TouchableOpacity로 변경 */}
+                   <TouchableOpacity 
+                     style={styles.codeBox} 
+                     onPress={handleCopyCode}
+                     activeOpacity={0.7}
+                   >
                       <Text style={styles.codeText}>{inviteCode}</Text>
-                   </View>
-                   {/* 코드 갱신 버튼 */}
+                      {/* 복사 아이콘 추가 (선택사항) */}
+                      <Copy size={16} color="#9ca3af" style={{ position: 'absolute', top: 8, right: 8}} />
+                   </TouchableOpacity>
+
                    <TouchableOpacity onPress={generateNewCode} style={styles.refreshBtn}>
                       <RefreshCw size={24} color="#6b7280" />
                    </TouchableOpacity>
                 </View>
 
-                <Text style={styles.securityNote}>* 코드는 10분 후 만료됩니다.</Text>
+                {/* 👇 복사 완료 메시지 (애니메이션 효과처럼 나타남) */}
+                {isCopied ? (
+                  <Text style={styles.copiedMsg}>✅ 클립보드에 복사되었습니다!</Text>
+                ) : (
+                  <Text style={styles.securityNote}>* 코드는 10분 후 만료됩니다.</Text>
+                )}
                 
                 <TouchableOpacity 
                   style={styles.modalCloseBtn}
@@ -453,7 +475,6 @@ export function ManagerMain({ onBack, userInfo }: ManagerMainProps) {
                   <Text style={styles.modalCloseText}>확인 완료</Text>
                 </TouchableOpacity>
 
-                {/* 다시 입력 화면으로 */}
                 <TouchableOpacity onPress={() => setStep('input')} style={{ marginTop: 16 }}>
                     <Text style={{ color: '#9ca3af', textDecorationLine: 'underline' }}>정보 수정하기</Text>
                 </TouchableOpacity>
@@ -512,71 +533,28 @@ const styles = StyleSheet.create({
   logoutText: { color: '#dc2626', fontWeight: 'bold', fontSize: 16 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
   modalContent: { backgroundColor: 'white', width: '85%', padding: 24, borderRadius: 16, alignItems: 'center', elevation: 5 },
-  
-  // 닫기 버튼 스타일
   closeXButton: { position: 'absolute', top: 16, right: 16, padding: 8 },
-  
   modalTitle: { fontSize: 24, fontWeight: 'bold', marginBottom: 8 },
   modalDesc: { color: '#6b7280', marginBottom: 20, textAlign: 'center' },
   codeRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
   codeBox: { backgroundColor: '#eff6ff', paddingVertical: 16, paddingHorizontal: 24, borderRadius: 12, minWidth: 180, alignItems: 'center', marginRight: 10 },
   codeText: { fontSize: 32, fontWeight: 'bold', color: '#2563eb', letterSpacing: 3 },
   refreshBtn: { padding: 12, backgroundColor: '#f3f4f6', borderRadius: 12 },
-  securityNote: { fontSize: 12, color: '#9ca3af', marginBottom: 20 },
+  securityNote: { fontSize: 12, color: '#9ca3af', marginBottom: 20, minHeight: 20 },
+  
+  // 👇 복사 알림 메시지 스타일
+  copiedMsg: { fontSize: 13, color: '#10b981', fontWeight: 'bold', marginBottom: 20, minHeight: 20 },
+
   modalCloseBtn: { width: '100%', backgroundColor: '#3b82f6', padding: 14, borderRadius: 12, alignItems: 'center' },
   modalCloseText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
-
-  // 👇 추가된 스타일
   inputGroup: { width: '100%', marginBottom: 16 },
-  input: {
-    borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, padding: 14, width: '100%',
-    backgroundColor: '#f9fafb', fontSize: 16
-  },
-  label: {
-    fontSize: 14, color: '#374151', marginBottom: 6, fontWeight: '600'
-  },
-  generateButton: {
-    width: '100%', backgroundColor: '#3b82f6', padding: 16, borderRadius: 12, 
-    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 8,
-    shadowColor: '#3b82f6', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8
-  },
+  input: { borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, padding: 14, width: '100%', backgroundColor: '#f9fafb', fontSize: 16 },
+  label: { fontSize: 14, color: '#374151', marginBottom: 6, fontWeight: '600' },
+  generateButton: { width: '100%', backgroundColor: '#3b82f6', padding: 16, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 8, shadowColor: '#3b82f6', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8 },
   generateButtonText: { color: 'white', fontWeight: 'bold', fontSize: 18 },
-  relinkCard: {
-    marginTop: 24,
-    backgroundColor: '#fff',
-    padding: 20,
-    borderRadius: 16,
-    // 그림자 효과
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  relinkTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1f2937',
-    marginBottom: 8,
-  },
-  relinkDesc: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginBottom: 16,
-    lineHeight: 20,
-  },
-  relinkButton: {
-    flexDirection: 'row',
-    backgroundColor: '#4b5563', // 진한 회색 (차분한 느낌)
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  relinkButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
+  relinkCard: { marginTop: 24, backgroundColor: '#fff', padding: 20, borderRadius: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
+  relinkTitle: { fontSize: 18, fontWeight: 'bold', color: '#1f2937', marginBottom: 8 },
+  relinkDesc: { fontSize: 14, color: '#6b7280', marginBottom: 16, lineHeight: 20 },
+  relinkButton: { flexDirection: 'row', backgroundColor: '#4b5563', paddingVertical: 12, paddingHorizontal: 16, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
+  relinkButtonText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
 });

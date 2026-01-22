@@ -7,6 +7,8 @@ import { saveUserToStorage, loadUserFromStorage, clearAllStorage, savePremiumSta
 import { MESSAGES, STORAGE_KEYS } from '../constants';
 import { registerForPushNotificationsAsync } from '../utils/notificationHelper';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as WebBrowser from 'expo-web-browser';
+import { makeRedirectUri } from 'expo-auth-session';
 
 export const useUserManagement = () => {
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
@@ -200,6 +202,73 @@ export const useUserManagement = () => {
     setUserInfo(null);
   };
 
+
+  /**
+   * 🌟 소셜 로그인 함수 (Google, Kakao)
+   * 네이버는 Supabase 미지원이므로 제외
+   */
+  const performOAuth = async (provider: 'google' | 'kakao') => {
+    try {
+      setIsLoading(true);
+      
+      // 1. 딥링크 주소 생성 (app.json의 scheme: 'musosik'과 일치해야 함)
+      const redirectUrl = makeRedirectUri({
+        scheme: 'musosik',
+        path: 'auth/callback',
+      });
+
+      console.log(`[OAuth] 시작: ${provider} (Redirect: ${redirectUrl})`);
+
+      // 2. Supabase에 로그인 요청
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: provider,
+        options: {
+          redirectTo: redirectUrl,
+          // 카카오는 닉네임 등을 가져오기 위해 스코프 추가가 필요할 수 있음 (선택)
+          // queryParams: { prompt: 'login' } // 매번 로그인창 뜨게 하려면 추가
+        },
+      });
+
+      if (error) throw error;
+      
+      // 3. 브라우저 띄우기
+      if (data.url) {
+        const result = await WebBrowser.openAuthSessionAsync(
+          data.url,
+          redirectUrl
+        );
+
+        // 4. 사용자가 로그인하고 앱으로 돌아왔을 때
+        if (result.type === 'success') {
+           // 세션이 갱신되었는지 확인
+           const { data: { session } } = await supabase.auth.getSession();
+           
+           if (session) {
+             console.log('[OAuth] 세션 획득 성공!');
+             // 우리 앱의 DB 로직(loadUser) 실행
+             const user = await loadUser();
+             
+             if (user) {
+               return true; // 성공
+             } else {
+               // 소셜 로그인은 됐는데 DB 트리거가 아직 안 돌았을 수 있으므로 잠시 대기 후 재시도 가능
+               // 일단은 true 반환
+               return true;
+             }
+           }
+        }
+      }
+      return false;
+
+    } catch (e) { 
+      console.error('소셜 로그인 실패:', e);
+      Alert.alert('로그인 실패', `${provider} 로그인 중 문제가 발생했습니다.`);
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return {
     userInfo,
     setUserInfo,
@@ -209,5 +278,6 @@ export const useUserManagement = () => {
     registerOrLogin,
     togglePremium,
     resetAllData,
+    performOAuth,
   };
 };

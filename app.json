@@ -23,7 +23,6 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.musosik.app",
-      
       "versionCode": 10,
       "permissions": [
         "RECEIVE_BOOT_COMPLETED",
@@ -55,7 +54,7 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "101ff0c9-6374-4a5e-bdb6-19abc95556cb"
+        "projectId": "d60624ae-62ce-4122-9654-9bb01e35d629"
       }
     }
   }
