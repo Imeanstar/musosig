@@ -1,21 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { View, ActivityIndicator, Alert, StyleSheet, Platform } from 'react-native';
-import { supabase } from '@/lib/supabase';
-import { useUserManagement } from '../hooks/useUserManagement';
-import { clearAllStorage } from '../utils/storage'; // 👈 [추가] 로그아웃 시 저장소 비우기 위해 필요
-
-// 🧩 컴포넌트 불러오기
-import { RoleSelection } from '../components/RoleSelection';
-import { MemberPairing } from '../components/MemberPairing';
-import { MemberMain } from '../components/MemberMain';
-import { ManagerMain } from '../components/ManagerMain';
-import { RegisterModal } from '../components/modals/RegisterModal'; 
-
-// 👇 알림 관련
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, SafeAreaView, Platform } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import { FontAwesome, Ionicons } from '@expo/vector-icons'; // 아이콘 추가
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
+import { supabase } from '@/lib/supabase';
 
-// 1. 알림 핸들러
+// Hooks & Utils
+import { useUserManagement } from '../hooks/useUserManagement';
+
+// Components
+import { ManagerMain } from '../components/ManagerMain';
+import { AuthManager } from '../components/AuthManager';
+import { MemberPairing } from '../components/MemberPairing';
+import { MemberMain } from '../components/MemberMain';
+
+// 1. 알림 핸들러 설정
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
@@ -24,11 +24,16 @@ Notifications.setNotificationHandler({
   }),
 });
 
+// 화면 단계 정의
+type ViewState = 'role_selection' | 'login_method' | 'auth_manager' | 'member_pairing';
+
 export default function Index() {
-  const { userInfo, setUserInfo, isLoading, setIsLoading, loadUser, registerOrLogin } = useUserManagement();
+  const { 
+    userInfo, isLoading, loadUser, performOAuth, resetAllData 
+  } = useUserManagement();
   
-  // 화면 상태 관리 ('selection' | 'member_pairing' | 'manager_login')
-  const [currentView, setCurrentView] = useState<'selection' | 'member_pairing' | 'manager_login'>('selection');
+  // 초기 상태: 역할 선택 화면
+  const [currentView, setCurrentView] = useState<ViewState>('role_selection');
 
   // 1. 앱 시작 시 유저 정보 로드
   useEffect(() => {
@@ -42,7 +47,7 @@ export default function Index() {
     }
   }, [userInfo]);
 
-  // 🚪 [핵심 수정] 로그아웃 핸들러 함수 정의
+  // 🚪 로그아웃 핸들러
   const handleLogout = async () => {
     Alert.alert("로그아웃", "정말 로그아웃 하시겠습니까?", [
       { text: "취소", style: "cancel" },
@@ -51,21 +56,10 @@ export default function Index() {
         style: "destructive",
         onPress: async () => {
           try {
-            // 1. Supabase 로그아웃
-            await supabase.auth.signOut();
-            
-            // 2. 로컬 기기 저장소 초기화 (utils/storage.ts)
-            await clearAllStorage();
-            
-            // 3. 화면 상태를 '선택 화면'으로 강제 리셋 (이게 없으면 로그인 모달이 뜸)
-            setCurrentView('selection'); 
-            
-            // 4. 유저 상태 비우기 -> 화면 전환 발생
-            setUserInfo(null);
-            
+            await resetAllData();
+            setCurrentView('role_selection'); // 첫 화면으로 리셋
           } catch (e) {
             console.error("로그아웃 실패:", e);
-            Alert.alert("오류", "로그아웃 중 문제가 발생했습니다.");
           }
         } 
       }
@@ -75,151 +69,258 @@ export default function Index() {
   // 🔄 로딩 중
   if (isLoading) {
     return (
-      <View style={styles.centerContainer}>
+      <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#ea580c" />
+        <Text style={{ marginTop: 10, color: '#666' }}>로딩 중...</Text>
       </View>
     );
   }
 
-  // ✅ [상태 1] 이미 로그인이 되어 있는 경우 (메인 화면으로)
+  // ✅ [상태 1] 이미 로그인이 되어 있는 경우 (자동 이동)
   if (userInfo) {
-    // A. 멤버라면 -> MemberMain (안부 전하기)
     if (userInfo.role === 'member') {
-      // 멤버도 로그아웃이 필요할 수 있으니 핸들러 연결
       return <MemberMain onBack={handleLogout} />; 
     }
-    
-    // B. 매니저라면 -> ManagerMain (멤버 관리)
-    // 🔥 [적용 완료] 여기서 handleLogout을 전달합니다.
+    return <ManagerMain userInfo={userInfo} onBack={handleLogout} />;
+  }
+
+  // ❌ [상태 2] 로그인 전 화면 분기
+
+  // ---------------------------------------------------------
+  // 1. 역할 선택 화면 (Role Selection) - 가장 첫 화면
+  // ---------------------------------------------------------
+  if (currentView === 'role_selection') {
     return (
-      <ManagerMain 
-        userInfo={userInfo} 
-        onBack={handleLogout} 
+      <SafeAreaView style={styles.container}>
+        <StatusBar style="auto" />
+        <View style={styles.contentContainer}>
+          
+          <View style={styles.logoSection}>
+            <Text style={styles.logoText}>무소식</Text>
+            <Text style={styles.subText}>가장 따뜻한 안부 확인 서비스</Text>
+          </View>
+
+          <View style={styles.roleContainer}>
+            <Text style={styles.questionText}>누구신가요?</Text>
+            
+            {/* 보호자(매니저) 버튼 */}
+            <TouchableOpacity 
+              style={styles.roleCard} 
+              activeOpacity={0.8}
+              onPress={() => setCurrentView('login_method')} // 로그인 방식 선택으로 이동
+            >
+              <View style={[styles.iconCircle, { backgroundColor: '#eff6ff' }]}>
+                 <Ionicons name="shield-checkmark" size={32} color="#3b82f6" />
+              </View>
+              <View style={styles.textGroup}>
+                <Text style={styles.roleTitle}>보호자 (자녀)</Text>
+                <Text style={styles.roleDesc}>부모님의 안부를 확인하고 싶어요</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={24} color="#cbd5e1" />
+            </TouchableOpacity>
+
+            {/* 부모님(멤버) 버튼 */}
+            <TouchableOpacity 
+              style={styles.roleCard} 
+              activeOpacity={0.8}
+              onPress={() => setCurrentView('member_pairing')} // 바로 코드 입력으로 이동
+            >
+              <View style={[styles.iconCircle, { backgroundColor: '#fff7ed' }]}>
+                 <Ionicons name="heart" size={32} color="#ea580c" />
+              </View>
+              <View style={styles.textGroup}>
+                <Text style={styles.roleTitle}>부모님 (어르신)</Text>
+                <Text style={styles.roleDesc}>자녀와 연결하고 싶어요</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={24} color="#cbd5e1" />
+            </TouchableOpacity>
+          </View>
+
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // ---------------------------------------------------------
+  // 2. 로그인 방식 선택 (Login Method) - 보호자 선택 시 뜸
+  // ---------------------------------------------------------
+  if (currentView === 'login_method') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.contentContainer}>
+          
+          <TouchableOpacity onPress={() => setCurrentView('role_selection')} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#333" />
+          </TouchableOpacity>
+
+          <View style={styles.headerSection}>
+            <Text style={styles.headerTitle}>반갑습니다!</Text>
+            <Text style={styles.headerSub}>어떻게 시작하시겠어요?</Text>
+          </View>
+
+          <View style={styles.buttonSection}>
+            {/* 이메일 로그인 */}
+            <TouchableOpacity 
+              style={styles.primaryButton} 
+              onPress={() => setCurrentView('auth_manager')}
+            >
+              <Text style={styles.primaryButtonText}>이메일로 시작하기</Text>
+            </TouchableOpacity>
+
+            <View style={styles.divider}>
+              <View style={styles.line} />
+              <Text style={styles.dividerText}>또는 소셜 계정으로</Text>
+              <View style={styles.line} />
+            </View>
+
+            {/* 카카오 */}
+            <TouchableOpacity 
+              style={[styles.socialButton, { backgroundColor: '#FEE500' }]} 
+              onPress={() => performOAuth('kakao')}
+            >
+              <FontAwesome name="comment" size={20} color="#3C1E1E" style={{ marginRight: 10 }} />
+              <Text style={[styles.socialButtonText, { color: '#3C1E1E' }]}>카카오로 시작하기</Text>
+            </TouchableOpacity>
+
+            {/* 구글 */}
+            <TouchableOpacity 
+              style={[styles.socialButton, { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#e5e7eb' }]} 
+              onPress={() => performOAuth('google')}
+            >
+              <FontAwesome name="google" size={20} color="#333" style={{ marginRight: 10 }} />
+              <Text style={[styles.socialButtonText, { color: '#333' }]}>Google로 시작하기</Text>
+            </TouchableOpacity>
+          </View>
+
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // ---------------------------------------------------------
+  // 3. 이메일 로그인/가입 화면 (AuthManager)
+  // ---------------------------------------------------------
+  if (currentView === 'auth_manager') {
+    return (
+      <AuthManager 
+        onBack={() => setCurrentView('login_method')} // 뒤로가기 시 방식 선택으로
       />
     );
   }
 
-  // ❌ [상태 2] 로그인이 안 된 경우 (화면 분기)
-
-  // 2-1. 멤버: 코드 입력 화면
+  // ---------------------------------------------------------
+  // 4. 멤버 페어링 화면 (MemberPairing)
+  // ---------------------------------------------------------
   if (currentView === 'member_pairing') {
     return (
       <MemberPairing
-        onBack={() => setCurrentView('selection')} 
-        onPairingComplete={async (managerName) => {
-          console.log("👉 [Debug] 페어링 완료 콜백 실행됨!");
-          
-          setIsLoading(true); 
-          try {
-            // 1. 현재 세션이 진짜 있는지 확인
-            const { data: { session } } = await supabase.auth.getSession();
-            console.log("👉 [Debug] 현재 세션 상태:", session ? "로그인됨" : "세션 없음(NULL)");
-            
-            if (session) console.log("👉 [Debug] User ID:", session.user.id);
-
-            // 2. 유저 정보 로드 시도
-            console.log("👉 [Debug] loadUser() 호출 시작");
-            await loadUser(); 
-            console.log("👉 [Debug] loadUser() 호출 끝");
-            
-            // 3. userInfo가 업데이트 됐는지 확인 (주의: 상태 업데이트는 즉시 반영 안 될 수 있음)
-            // 여기서는 loadUser 내부 동작이 중요함
-            
-          } catch (e) {
-            console.error("❌ [Debug] 에러 발생:", e);
-            Alert.alert('오류', '로그인 정보를 갱신하지 못했습니다.');
-          } finally {
-            setIsLoading(false);
-          }
+        onBack={() => setCurrentView('role_selection')} // 뒤로가기 시 역할 선택으로
+        onPairingComplete={async () => {
+          await loadUser(); // 완료되면 유저 로드 -> 자동 이동
         }}
       />
     );
   }
 
-  // 2-2. 매니저: 로그인/가입 화면
-  if (currentView === 'manager_login') {
-    return (
-      <RegisterModal
-        visible={true} 
-        onRegister={async (name, phone) => {
-          // 매니저로 가입/로그인 시도
-          const success = await registerOrLogin(name, phone); 
-          if (success) return true;
-          return false;
-        }}
-        onClose={() => setCurrentView('selection')} // 닫기 버튼 누르면 선택 화면으로
-      />
-    );
-  }
-
-  // 2-3. 기본 화면: 역할 선택
-  return (
-    <RoleSelection
-      onRoleSelect={(role) => {
-        if (role === 'member') {
-          setCurrentView('member_pairing');
-        } else {
-          setCurrentView('manager_login');
-        }
-      }}
-    />
-  );
+  return null;
 }
 
-// 👇 토큰 발급 로직
+// ... (토큰 관련 함수 registerAndSaveToken, registerForPushNotificationsAsync는 기존과 동일하게 유지)
+// 👇 토큰 발급 및 저장 로직 (컴포넌트 외부 함수)
 async function registerAndSaveToken(userId: string) {
-  try {
-    const token = await registerForPushNotificationsAsync();
-    if (token) {
-      console.log("📢 알림 토큰 발급 완료:", token);
-      const { error } = await supabase
-        .from('users')
-        .update({ push_token: token })
-        .eq('id', userId);
-
-      if (error) console.error("❌ 토큰 저장 실패:", error);
+    try {
+      const token = await registerForPushNotificationsAsync();
+      if (token) {
+        console.log("📢 알림 토큰 발급 완료:", token);
+        const { error } = await supabase
+          .from('users')
+          .update({ push_token: token })
+          .eq('id', userId);
+  
+        if (error) console.error("❌ 토큰 저장 실패:", error);
+      }
+    } catch (e) {
+      console.error("토큰 등록 에러:", e);
     }
-  } catch (e) {
-    console.error("토큰 등록 에러:", e);
   }
-}
-
-async function registerForPushNotificationsAsync() {
-  if (Platform.OS === 'web') return; 
-
-  let token;
-  if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('default', {
-      name: '기본 알림',
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#FF231F7C',
-    });
+  
+  async function registerForPushNotificationsAsync() {
+    if (Platform.OS === 'web') return; 
+  
+    let token;
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('default', {
+        name: '기본 알림',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#FF231F7C',
+      });
+    }
+  
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
+    if (existingStatus !== 'granted') {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
+    if (finalStatus !== 'granted') return;
+  
+    const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
+    try {
+      token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+    } catch (e) {
+      console.error("토큰 발급 실패:", e);
+    }
+  
+    return token;
   }
-
-  const { status: existingStatus } = await Notifications.getPermissionsAsync();
-  let finalStatus = existingStatus;
-  if (existingStatus !== 'granted') {
-    const { status } = await Notifications.requestPermissionsAsync();
-    finalStatus = status;
-  }
-  if (finalStatus !== 'granted') return;
-
-  const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
-  try {
-    token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
-  } catch (e) {
-    console.error("토큰 발급 실패:", e);
-  }
-
-  return token;
-}
 
 const styles = StyleSheet.create({
-  centerContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#fff',
+  container: { flex: 1, backgroundColor: '#fff7ed' },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff7ed' },
+  contentContainer: { flex: 1, paddingHorizontal: 24, justifyContent: 'center' },
+
+  // 로고 섹션
+  logoSection: { alignItems: 'center', marginBottom: 50 },
+  logoText: { fontSize: 48, fontWeight: '900', color: '#ea580c', marginBottom: 8 },
+  subText: { fontSize: 16, color: '#6b7280' },
+
+  // 역할 선택 섹션
+  roleContainer: { width: '100%', gap: 16 },
+  questionText: { fontSize: 20, fontWeight: 'bold', color: '#1f2937', marginBottom: 8, textAlign: 'center' },
+  
+  roleCard: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: 'white',
+    padding: 20, borderRadius: 20,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 3
   },
+  iconCircle: { width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center', marginRight: 16 },
+  textGroup: { flex: 1 },
+  roleTitle: { fontSize: 18, fontWeight: 'bold', color: '#1f2937', marginBottom: 4 },
+  roleDesc: { fontSize: 14, color: '#6b7280' },
+
+  // 로그인 방식 선택 섹션
+  backButton: { position: 'absolute', top: 60, left: 24, zIndex: 10 },
+  headerSection: { marginBottom: 40 },
+  headerTitle: { fontSize: 28, fontWeight: 'bold', color: '#1f2937', marginBottom: 8 },
+  headerSub: { fontSize: 16, color: '#6b7280' },
+  
+  buttonSection: { width: '100%' },
+  primaryButton: { 
+    backgroundColor: '#ea580c', paddingVertical: 16, borderRadius: 12, 
+    alignItems: 'center', marginBottom: 10,
+    shadowColor: '#ea580c', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 5
+  },
+  primaryButtonText: { color: 'white', fontSize: 18, fontWeight: 'bold' },
+
+  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 24 },
+  line: { flex: 1, height: 1, backgroundColor: '#e5e7eb' },
+  dividerText: { marginHorizontal: 10, color: '#9ca3af', fontSize: 14 },
+
+  socialButton: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 16, borderRadius: 12, marginBottom: 12, width: '100%',
+    elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2
+  },
+  socialButtonText: { fontSize: 16, fontWeight: 'bold' },
 });
