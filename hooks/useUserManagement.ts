@@ -135,7 +135,13 @@ export const useUserManagement = () => {
           updated_at: new Date()
         });
       
-      if (dbError) console.warn("DB 수동 저장 실패(트리거가 이미 처리했을 수 있음):", dbError);
+        if (dbError) {
+          // 🚨 DB 저장 실패 시 (중복 전화번호 등)
+          if (dbError.code === '23505') { // Postgres 유니크 위반 코드
+             throw new Error('이미 가입된 전화번호입니다.\n로그인해주세요.');
+          }
+          throw dbError;
+        }
 
       await loadUser();
       Alert.alert('환영합니다!', `${name} 매니저님 가입을 축하드립니다.`);
@@ -275,9 +281,49 @@ export const useUserManagement = () => {
     setUserInfo(null);
   };
 
+  /**
+   * 🆕 소셜 로그인 후 전화번호 업데이트 (중복 체크 포함)
+   */
+  const updateSocialUserInfo = async (phone: string, name: string): Promise<boolean> => {
+    if (!userInfo) return false;
+    
+    try {
+      setIsLoading(true);
+      const cleanPhone = phone.replace(/-/g, '');
+
+      // DB 업데이트
+      const { error } = await supabase
+        .from('users')
+        .update({ 
+          phone: cleanPhone,
+          name: name, // 이름도 혹시 수정했을 수 있으니 같이 저장
+          updated_at: new Date(),
+        })
+        .eq('id', userInfo.id);
+
+      if (error) {
+        // 🚨 아까 설정한 DB 유니크 제약조건(중복 방지) 발동!
+        if (error.code === '23505') { 
+          throw new Error('이미 가입된 전화번호입니다.\n기존 계정으로 로그인해주세요.');
+        }
+        throw error;
+      }
+
+      // 성공하면 최신 정보 다시 불러오기
+      await loadUser(); 
+      return true;
+
+    } catch (e: any) {
+      Alert.alert('저장 실패', e.message || '오류가 발생했습니다.');
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return {
     userInfo, setUserInfo, isLoading, setIsLoading, loadUser,
     loginWithEmail, signUpWithEmail, // 👈 신규 로직
-    performOAuth, togglePremium, resetAllData,
+    performOAuth, togglePremium, resetAllData, updateSocialUserInfo,
   };
 };

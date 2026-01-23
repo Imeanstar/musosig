@@ -76,8 +76,20 @@ export default function Index() {
     );
   }
 
-  // ✅ [상태 1] 이미 로그인이 되어 있는 경우 (자동 이동)
+  // ✅ [수정] 로그인 된 유저 처리
   if (userInfo) {
+    // 🛑 1. 전화번호가 없으면 -> AuthManager를 'social_finish' 모드로 보여줌!
+    if (!userInfo.phone) {
+      return (
+        <AuthManager 
+          onBack={handleLogout} // 뒤로가기 누르면 로그아웃(처음부터 다시)
+          initialMode="social_finish" // 👈 "추가 정보 입력 모드" 발동
+          socialUser={userInfo}       // 👈 현재 정보(이름 등) 넘겨줌
+        />
+      );
+    }
+
+    // ✅ 2. 전화번호도 있으면 -> 정상적으로 메인 화면 진입
     if (userInfo.role === 'member') {
       return <MemberMain onBack={handleLogout} />; 
     }
