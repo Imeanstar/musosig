@@ -35,7 +35,7 @@ export const useUserManagement = () => {
     onAuthError: (error) => {
       console.error('[UserManagement] OAuth 에러:', error);
     },
-    enableDebugAlerts: __DEV__, // 개발 모드에서만 Alert 활성화
+    enableDebugAlerts: false, // 배포 시에는 false (필요 시 true로 변경)
   });
 
   // 초기 로드

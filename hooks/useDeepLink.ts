@@ -59,12 +59,13 @@ export const useDeepLink = ({
   const handleDeepLink = async (event: { url: string }) => {
     if (!event.url) return;
 
+    // 🔇 Expo 개발 서버 URL 무시 (exp://, http://localhost 등)
+    if (event.url.startsWith('exp://') || event.url.startsWith('http://localhost')) {
+      return;
+    }
+
     try {
       console.log('[DeepLink] 수신:', event.url);
-
-      if (enableDebugAlerts) {
-        Alert.alert('🔗 딥링크 수신', event.url);
-      }
 
       const params = extractParamsFromUrl(event.url);
 
@@ -86,7 +87,7 @@ export const useDeepLink = ({
         console.log('[DeepLink] 토큰 발견, 세션 설정 중...');
 
         if (enableDebugAlerts) {
-          Alert.alert('🔑 토큰 발견', '세션을 설정합니다...');
+          Alert.alert('✅ 로그인 성공', '세션을 설정합니다...');
         }
 
         // Supabase 세션 설정
@@ -99,7 +100,7 @@ export const useDeepLink = ({
           console.error('[DeepLink] 세션 설정 실패:', error);
           
           if (enableDebugAlerts) {
-            Alert.alert('🔥 세션 설정 실패', error.message);
+            Alert.alert('세션 설정 실패', error.message);
           }
           
           onAuthError?.(error.message);
@@ -115,20 +116,13 @@ export const useDeepLink = ({
           
           onAuthSuccess?.();
         }
-      } else {
-        // 토큰 없이 돌아온 경우
-        console.warn('[DeepLink] access_token 없음:', event.url);
-        
-        if (enableDebugAlerts) {
-          Alert.alert('⚠️ 토큰 없음', 'URL에 토큰이 포함되지 않았습니다.');
-        }
       }
 
     } catch (e: any) {
       console.error('[DeepLink] 처리 중 오류:', e);
       
       if (enableDebugAlerts) {
-        Alert.alert('💥 딥링크 처리 오류', e.message || JSON.stringify(e));
+        Alert.alert('딥링크 처리 오류', e.message || '오류가 발생했습니다.');
       }
       
       onAuthError?.(e.message);
@@ -144,13 +138,8 @@ export const useDeepLink = ({
 
     // 초기 실행 시 URL 확인 (앱이 링크로 실행된 경우)
     Linking.getInitialURL().then((url) => {
-      if (url) {
+      if (url && !url.startsWith('exp://') && !url.startsWith('http://localhost')) {
         console.log('[DeepLink] 초기 URL:', url);
-        
-        if (enableDebugAlerts) {
-          Alert.alert('🚀 초기 실행 URL', url);
-        }
-        
         handleDeepLink({ url });
       }
     });
