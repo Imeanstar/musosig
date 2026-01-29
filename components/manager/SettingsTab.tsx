@@ -1,0 +1,420 @@
+/**
+ * SettingsTab.tsx (v2.0 - Member Specific Settings)
+ * - 상단: 매니저 앱 자체 설정 (알림, 방해금지)
+ * - 하단: 멤버별 설정 리스트 -> 클릭 시 개별 설정 모달
+ */
+
+import React, { useState } from 'react';
+import { 
+  View, Text, StyleSheet, ScrollView, Switch, TouchableOpacity, 
+  Alert, Modal, TouchableWithoutFeedback, FlatList
+} from 'react-native';
+import { ChevronRight, ChevronLeft, Check, User as UserIcon, X } from 'lucide-react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Member } from '../../types'; // 타입 불러오기
+
+interface SettingsTabProps {
+  isPremium: boolean;
+  onUpgradePress: () => void;
+  members: Member[]; // 멤버 리스트 받기
+  onUpdateMemberSetting: (memberId: string, settings: any) => void; // 부모에게 변경 요청
+}
+
+const CHECK_IN_OPTIONS = [
+  { label: '기본 클릭 (터치)', value: '클릭' },
+  { label: '산수 문제 (쉬움)', value: '수학(EASY)' },
+  { label: '산수 문제 (어려움)', value: '수학(HARD)' },
+  { label: '사진 인증', value: '사진인증' },
+  { label: '휴대폰 흔들기', value: '흔들기' },
+];
+
+const ALERT_CYCLES = [48, 72, 96]; 
+
+export function SettingsTab({ isPremium, onUpgradePress, members, onUpdateMemberSetting }: SettingsTabProps) {
+  // --- 매니저 앱 설정 상태 ---
+  const [pushEnabled, setPushEnabled] = useState(true);
+  const [smsEnabled, setSmsEnabled] = useState(true);
+  const [dndStart, setDndStart] = useState('22시');
+  const [dndEnd, setDndEnd] = useState('08시');
+
+  // --- 개별 설정을 위한 상태 ---
+  const [selectedMember, setSelectedMember] = useState<Member | null>(null); // 현재 설정 중인 멤버
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  
+  // 모달 내부 임시 상태 (저장 버튼 누르기 전까지)
+  const [tempMethod, setTempMethod] = useState('클릭');
+  const [tempCycleIndex, setTempCycleIndex] = useState(0);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false); // 모달 내부 드롭다운
+
+  // 멤버 클릭 시 설정창 열기
+  const openMemberSettings = (member: Member) => {
+    if (!isPremium) {
+       // 프리미엄 아니면 잠금 오버레이가 이미 보여주고 있으므로 동작 X (또는 안내)
+       return; 
+    }
+    
+    setSelectedMember(member);
+    // 멤버의 기존 설정 불러오기 (없으면 기본값)
+    setTempMethod(member.settings?.checkInMethod || '클릭');
+    const currentCycle = member.settings?.alertCycle || 48;
+    const idx = ALERT_CYCLES.indexOf(currentCycle);
+    setTempCycleIndex(idx >= 0 ? idx : 0);
+    
+    setIsModalOpen(true);
+  };
+
+  // 설정 저장
+  const saveMemberSettings = () => {
+    if (selectedMember) {
+      const newSettings = {
+        ...selectedMember.settings,
+        checkInMethod: tempMethod,
+        alertCycle: ALERT_CYCLES[tempCycleIndex],
+      };
+      onUpdateMemberSetting(selectedMember.id, newSettings);
+      setIsModalOpen(false);
+      Alert.alert("저장 완료", `${selectedMember.name}님의 설정이 변경되었습니다.`);
+    }
+  };
+
+  const handleCycleChange = (direction: 'prev' | 'next') => {
+    if (direction === 'prev') setTempCycleIndex(prev => Math.max(0, prev - 1));
+    else setTempCycleIndex(prev => Math.min(ALERT_CYCLES.length - 1, prev + 1));
+  };
+
+  const showNotImplemented = (feature: string) => {
+    Alert.alert("알림", `${feature} 기능은 추후 업데이트 예정입니다.`);
+  };
+
+  return (
+    <ScrollView contentContainerStyle={styles.container}>
+      
+      {/* ================= 섹션 1: 매니저 앱 설정 ================= */}
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>내 앱 설정</Text>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>알림 수신 설정</Text>
+        <View style={styles.halfContainer}>
+          <View style={styles.halfItem}>
+            <Text style={styles.label}>알림</Text>
+            <Switch
+              trackColor={{ false: "#e5e7eb", true: "#3b82f6" }}
+              thumbColor={"white"}
+              value={pushEnabled}
+              onValueChange={setPushEnabled}
+              style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }} 
+            />
+          </View>
+          <View style={styles.halfItem}>
+            <Text style={styles.label}>문자</Text>
+            <Switch
+              trackColor={{ false: "#e5e7eb", true: "#1f2937" }}
+              thumbColor={"white"}
+              value={smsEnabled}
+              onValueChange={setSmsEnabled}
+              style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+            />
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>방해금지 시간</Text>
+        <View style={styles.timePickerContainer}>
+          <TouchableOpacity style={styles.dropdownBtn} onPress={() => showNotImplemented('시간 선택')}>
+            <Text style={styles.dropdownText}>{dndStart}</Text>
+          </TouchableOpacity>
+          <Text style={styles.tilde}>~</Text>
+          <TouchableOpacity style={styles.dropdownBtn} onPress={() => showNotImplemented('시간 선택')}>
+            <Text style={styles.dropdownText}>{dndEnd}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+
+      {/* ================= 섹션 2: 멤버별 케어 설정 (프리미엄) ================= */}
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>멤버별 맞춤 케어</Text>
+        <Text style={styles.sectionSubtitle}>멤버를 눌러 개별 설정을 변경하세요.</Text>
+      </View>
+
+      <View style={styles.premiumSectionContainer}>
+        
+        {/* 멤버 리스트 카드 */}
+        <View style={[styles.card, { padding: 0, overflow: 'hidden' }]}>
+          {members.length === 0 ? (
+             <View style={{ padding: 24, alignItems: 'center' }}>
+               <Text style={{ color: '#9ca3af' }}>등록된 멤버가 없습니다.</Text>
+             </View>
+          ) : (
+            members.map((member, index) => (
+              <TouchableOpacity 
+                key={member.id} 
+                style={[
+                  styles.memberRow, 
+                  index !== members.length - 1 && styles.memberRowBorder,
+                  !isPremium && { opacity: 0.3 }
+                ]}
+                onPress={() => openMemberSettings(member)}
+                disabled={!isPremium}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <View style={styles.avatarCircle}>
+                    <UserIcon size={20} color="#6b7280" />
+                  </View>
+                  <View style={{ marginLeft: 12 }}>
+                    <Text style={styles.memberName}>{member.name}</Text>
+                    {/* 현재 설정 요약 뱃지 */}
+                    <View style={{ flexDirection: 'row', marginTop: 4 }}>
+                      <View style={styles.miniBadge}>
+                        <Text style={styles.miniBadgeText}>
+                          {member.settings?.checkInMethod || '클릭'}
+                        </Text>
+                      </View>
+                      <View style={[styles.miniBadge, { marginLeft: 4, backgroundColor: '#eff6ff' }]}>
+                        <Text style={[styles.miniBadgeText, { color: '#3b82f6' }]}>
+                          {member.settings?.alertCycle || 48}시간
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+                <ChevronRight size={20} color="#d1d5db" />
+              </TouchableOpacity>
+            ))
+          )}
+        </View>
+
+        {/* 프리미엄 잠금 오버레이 */}
+        {!isPremium && (
+          <View style={styles.premiumOverlay}>
+            <Text style={styles.overlayTitle}>
+              멤버별 맞춤 케어는{'\n'}프리미엄 기능입니다
+            </Text>
+            <TouchableOpacity onPress={onUpgradePress}>
+              <LinearGradient
+                colors={['#3b82f6', '#06b6d4']}
+                style={styles.premiumBtn}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+              >
+                <Text style={styles.premiumBtnText}>프리미엄 구독하기</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+
+      <View style={{ height: 40 }} />
+
+
+      {/* ================= [모달] 멤버 개별 설정창 ================= */}
+      <Modal
+        visible={isModalOpen}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setIsModalOpen(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.settingsModalContent}>
+            
+            {/* 모달 헤더 */}
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{selectedMember?.name}님 케어 설정</Text>
+              <TouchableOpacity onPress={() => setIsModalOpen(false)}>
+                <X size={24} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView>
+              {/* 1. 인증 방식 선택 */}
+              <Text style={styles.settingLabel}>출석 인증 방식</Text>
+              <TouchableOpacity 
+                style={styles.selectorBtn} 
+                onPress={() => setIsDropdownOpen(true)}
+              >
+                <Text style={styles.selectorText}>
+                  {CHECK_IN_OPTIONS.find(opt => opt.value === tempMethod)?.label || tempMethod}
+                </Text>
+                <ChevronRight size={24} color="#9ca3af" style={{ transform: [{ rotate: '90deg' }] }} />
+              </TouchableOpacity>
+              {/* 드롭다운 (펼쳐짐) - 간단하게 모달 안에 조건부 렌더링으로 구현 */}
+              {isDropdownOpen && (
+                <View style={styles.dropdownList}>
+                  {CHECK_IN_OPTIONS.map((opt) => (
+                    <TouchableOpacity 
+                      key={opt.value} 
+                      style={styles.dropdownItem}
+                      onPress={() => {
+                        setTempMethod(opt.value);
+                        setIsDropdownOpen(false);
+                      }}
+                    >
+                      <Text style={[
+                        styles.dropdownItemText, 
+                        tempMethod === opt.value && { color: '#3b82f6', fontWeight: 'bold' }
+                      ]}>
+                        {opt.label}
+                      </Text>
+                      {tempMethod === opt.value && <Check size={16} color="#3b82f6"/>}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+
+              <View style={{ height: 24 }} />
+
+              {/* 2. 알림 주기 설정 */}
+              <View>
+                <Text style={styles.settingLabel}>비상 알림 골든타임</Text>
+                <Text style={styles.guideText}>
+                  {ALERT_CYCLES[tempCycleIndex]}시간 미접속 시 문자 발송
+                </Text>
+                
+                <View style={styles.stepperContainer}>
+                  <TouchableOpacity 
+                    style={[styles.stepBtn, tempCycleIndex === 0 && { opacity: 0.3 }]} 
+                    onPress={() => handleCycleChange('prev')}
+                    disabled={tempCycleIndex === 0}
+                  >
+                    <ChevronLeft size={24} color="#6b7280" />
+                  </TouchableOpacity>
+                  
+                  <View style={styles.cycleDisplay}>
+                    <Text style={styles.cycleValueText}>{ALERT_CYCLES[tempCycleIndex]}시간</Text>
+                    <View style={styles.cycleDetailBadge}>
+                      <Text style={styles.cycleDetailText}>
+                        🔔 {ALERT_CYCLES[tempCycleIndex] / 2}h  |  🚨 {ALERT_CYCLES[tempCycleIndex]}h
+                      </Text>
+                    </View>
+                  </View>
+                  
+                  <TouchableOpacity 
+                    style={[styles.stepBtn, tempCycleIndex === ALERT_CYCLES.length - 1 && { opacity: 0.3 }]} 
+                    onPress={() => handleCycleChange('next')}
+                    disabled={tempCycleIndex === ALERT_CYCLES.length - 1}
+                  >
+                    <ChevronRight size={24} color="#6b7280" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </ScrollView>
+
+            {/* 저장 버튼 */}
+            <TouchableOpacity style={styles.saveBtn} onPress={saveMemberSettings}>
+              <Text style={styles.saveBtnText}>저장하기</Text>
+            </TouchableOpacity>
+
+          </View>
+        </View>
+      </Modal>
+
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { padding: 20, backgroundColor: '#f3f4f6' },
+  sectionHeader: { marginBottom: 12, marginTop: 8 },
+  sectionTitle: { fontSize: 20, fontWeight: 'bold', color: '#111827' },
+  sectionSubtitle: { fontSize: 14, color: '#6b7280', marginTop: 2 },
+  
+  card: {
+    backgroundColor: 'white', borderRadius: 20, padding: 24, marginBottom: 24,
+    elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8,
+  },
+  cardTitle: { fontSize: 16, fontWeight: 'bold', color: '#1f2937', marginBottom: 16 },
+
+  // 앱 설정 (반반)
+  halfContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  halfItem: {
+    width: '48%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    backgroundColor: '#f9fafb', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12,
+  },
+  label: { fontSize: 15, color: '#374151', fontWeight: '500' },
+
+  // 방해금지
+  timePickerContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  dropdownBtn: {
+    backgroundColor: 'white', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12,
+    paddingHorizontal: 16, paddingVertical: 12, width: '45%', alignItems: 'center'
+  },
+  dropdownText: { fontSize: 16, color: '#374151' },
+  tilde: { fontSize: 20, color: '#9ca3af' },
+
+  // 멤버 리스트 스타일
+  premiumSectionContainer: { position: 'relative' },
+  memberRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    padding: 16, backgroundColor: 'white'
+  },
+  memberRowBorder: { borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
+  avatarCircle: {
+    width: 40, height: 40, borderRadius: 20, backgroundColor: '#f3f4f6',
+    justifyContent: 'center', alignItems: 'center'
+  },
+  memberName: { fontSize: 16, fontWeight: 'bold', color: '#1f2937' },
+  miniBadge: {
+    backgroundColor: '#f3f4f6', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6
+  },
+  miniBadgeText: { fontSize: 11, color: '#4b5563', fontWeight: '600' },
+
+  // 오버레이
+  premiumOverlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 20,
+    backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 20, justifyContent: 'center', alignItems: 'center',
+    padding: 24, zIndex: 10,
+  },
+  overlayTitle: { color: 'white', fontSize: 18, fontWeight: 'bold', textAlign: 'center', marginBottom: 20 },
+  premiumBtn: { paddingHorizontal: 24, paddingVertical: 14, borderRadius: 12 },
+  premiumBtnText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
+
+  // ================= 모달 스타일 =================
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end',
+  },
+  settingsModalContent: {
+    backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    padding: 24, height: '70%', // 바텀 시트 느낌
+  },
+  modalHeader: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24
+  },
+  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#111827' },
+  
+  settingLabel: { fontSize: 16, fontWeight: 'bold', color: '#374151', marginBottom: 8, marginTop: 8 },
+  guideText: { fontSize: 13, color: '#9ca3af', marginBottom: 16 },
+
+  selectorBtn: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, padding: 16,
+  },
+  selectorText: { fontSize: 16, color: '#374151' },
+
+  // 내부 드롭다운
+  dropdownList: {
+    backgroundColor: '#f9fafb', borderRadius: 12, marginTop: 8, padding: 8
+  },
+  dropdownItem: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingVertical: 12, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: '#e5e7eb'
+  },
+  dropdownItemText: { fontSize: 15, color: '#4b5563' },
+
+  // 스테퍼
+  stepperContainer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 8, marginBottom: 24 },
+  stepBtn: { backgroundColor: '#f3f4f6', padding: 12, borderRadius: 12 },
+  cycleDisplay: { alignItems: 'center', minWidth: 140 },
+  cycleValueText: { fontSize: 28, fontWeight: 'bold', color: '#1f2937', marginBottom: 4 },
+  cycleDetailBadge: {
+    backgroundColor: '#eff6ff', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8
+  },
+  cycleDetailText: { fontSize: 11, color: '#3b82f6', fontWeight: '600' },
+
+  saveBtn: {
+    backgroundColor: '#3b82f6', paddingVertical: 16, borderRadius: 16, alignItems: 'center', marginTop: 'auto'
+  },
+  saveBtnText: { color: 'white', fontSize: 18, fontWeight: 'bold' },
+});

@@ -54,6 +54,29 @@ export function ProfileTab({
     );
   };
 
+  // 📅 남은 기간 계산 로직 (D-Day)
+  const getBillingInfo = () => {
+    if (!userInfo?.premium_started_at) return null;
+
+    const startDate = new Date(userInfo.premium_started_at);
+    const today = new Date();
+
+    // 다음 결제일 = 시작일 + 1달
+    const nextBillingDate = new Date(startDate);
+    nextBillingDate.setMonth(startDate.getMonth() + 1);
+
+    // 남은 시간 계산 (밀리초 단위 -> 일 단위 변환)
+    const diffTime = nextBillingDate.getTime() - today.getTime();
+    const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    // 날짜 포맷 (YYYY.MM.DD)
+    const dateStr = nextBillingDate.toISOString().split('T')[0].replace(/-/g, '.');
+
+    return { dateStr, daysLeft };
+  };
+
+  const billingInfo = getBillingInfo();
+
   return (
     <ScrollView contentContainerStyle={styles.container}>
       
@@ -71,25 +94,36 @@ export function ProfileTab({
 
         <View style={styles.divider} />
 
-        {/* 멤버십 상태 */}
+        {/* 멤버십 상태 섹션 */}
         <View style={styles.membershipBox}>
+          
+          {/* 1. 왼쪽 텍스트 영역 */}
           <View>
             <Text style={styles.membershipLabel}>현재 이용 중인 플랜</Text>
             <Text style={[
               styles.membershipValue, 
               userInfo?.is_premium ? { color: '#d97706' } : { color: '#4b5563' }
             ]}>
-              {userInfo?.is_premium ? '안심 보호 중 🛡️' : '베이직 플랜'}
+              {userInfo?.is_premium ? '든든한 안심 케어 🛡️' : '무소식 기본 플랜'}
             </Text>
           </View>
 
-          {/* 프리미엄이 아닐 때만 업그레이드 버튼 */}
-          {!userInfo?.is_premium && (
+          {/* 2. 오른쪽 영역 (버튼 or D-Day 뱃지) */}
+          {!userInfo?.is_premium ? (
+            // (1) 프리미엄 아니면 -> [혜택 보기] 버튼
             <TouchableOpacity style={styles.upgradeBtn} onPress={onUpgrade}>
               <Text style={styles.upgradeBtnText}>혜택 보기</Text>
               <ChevronRight size={14} color="white" />
             </TouchableOpacity>
+          ) : (
+            // (2) 프리미엄이면 -> [30일 남음] 뱃지 (오른쪽 끝 배치)
+            billingInfo && (
+              <View style={styles.dDayContainer}>
+                <Text style={styles.dDayText}>{billingInfo.daysLeft}일 남음</Text>
+              </View>
+            )
           )}
+
         </View>
       </View>
 
@@ -285,5 +319,19 @@ const styles = StyleSheet.create({
     textAlign: 'center', 
     color: '#cbd5e1', 
     fontSize: 12 
+  },
+
+  dDayContainer: {
+    backgroundColor: '#fff7ed', // 아주 연한 오렌지색 배경
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#ffedd5',
+  },
+  dDayText: {
+    color: '#d97706', // 진한 오렌지색 글씨
+    fontSize: 13,
+    fontWeight: '700',
   },
 });

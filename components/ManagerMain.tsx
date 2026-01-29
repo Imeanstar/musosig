@@ -14,6 +14,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView, RefreshControl, A
 import { LinearGradient } from 'expo-linear-gradient';
 import { ChevronLeft, ChevronRight, Plus, Settings, User, Crown, RefreshCw } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { supabase } from '@/lib/supabase';
 
 // Hooks
 import { useUserManagement } from '../hooks/useUserManagement';
@@ -24,10 +25,11 @@ import { useCalendar } from '../hooks/useCalendar';
 // Components
 import { InviteCodeModal } from './manager/InviteCodeModal';
 import { ProfileTab } from './manager/ProfileTab';
+import { SettingsTab } from './manager/SettingsTab';
 import { SubscriptionModal } from './modals/SubscriptionModal';
 
 // Types
-import { UserInfo } from '../types';
+import { UserInfo, Member, UserSettings } from '../types';
 
 interface ManagerMainProps {
   onBack: () => void;
@@ -55,6 +57,10 @@ export function ManagerMain({ onBack, userInfo }: ManagerMainProps) {
   const { isCodeLoading, generateInviteCode, generateRelinkCode } = useInviteCode();
   const { currentDate, checkInLogs, changeMonth, getDaysInMonth } = useCalendar(selectedMember?.id);
 
+
+  const [currentUser, setCurrentUser] = useState<UserInfo>(userInfo);
+  
+  
   // 초기 로드
   useEffect(() => {
     if (userInfo) fetchMembers();
@@ -74,6 +80,62 @@ export function ManagerMain({ onBack, userInfo }: ManagerMainProps) {
     }
   };
 
+  const refreshUserData = async () => {
+    try {
+      // DB에서 내 최신 정보를 다시 조회
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', currentUser.id)
+        .single();
+
+      if (data && !error) {
+        // 기존 정보에 덮어씌우기 (is_premium 등 최신화)
+        // user_id 등 누락된 필드가 있을 수 있으니 안전하게 병합
+        setCurrentUser(prev => ({
+            ...prev,
+            ...data,
+            is_premium: data.is_premium ?? false, // 확실하게 boolean 처리
+        }));
+        console.log('🔄 유저 정보 최신화 완료:', data.is_premium ? '프리미엄' : '무료');
+      }
+    } catch (e) {
+      console.error('유저 정보 갱신 실패:', e);
+    }
+  };
+
+  // ✨ [추가] 탭이 바뀔 때마다 실행되는 감시자 (useEffect)
+  useEffect(() => {
+    refreshUserData();
+  }, [activeTab]); // 👈 activeTab이 바뀔 때마다 이 안의 코드가 실행됨!
+
+  const handleUpdateMemberSetting = async (memberId: string, newSettings: UserSettings) => {
+    try {
+      console.log(`💾 저장 시도 - 멤버: ${memberId}, 설정:`, newSettings);
+
+      // 1. Supabase에 업데이트
+      const { error } = await supabase
+        .from('users')
+        .update({ 
+          settings: newSettings,
+          updated_at: new Date(), // 수정 시간도 갱신
+        })
+        .eq('id', memberId);
+
+      if (error) throw error;
+
+      // 2. 성공 시 목록 새로고침 (화면 즉시 반영)
+      await fetchMembers();
+      
+      // (선택) 사용자에게 알림을 띄우고 싶지 않다면 이 줄은 빼셔도 됩니다.
+      // SettingsTab 내부에서 이미 '저장 완료' 알림을 띄우고 있으니 여긴 조용히 넘어가도 됩니다.
+
+    } catch (e) {
+      console.error('설정 저장 실패:', e);
+      Alert.alert('오류', '설정을 저장하지 못했습니다. 다시 시도해 주세요.');
+    }
+  };
+  
   return (
     <View style={styles.container}>
       
@@ -231,16 +293,19 @@ export function ManagerMain({ onBack, userInfo }: ManagerMainProps) {
 
         {/* 탭 2: 알림 */}
         {activeTab === 'notifications' && (
-          <View style={styles.centerTab}>
-            <Settings size={48} color="#cbd5e1" />
-            <Text style={styles.tabPlaceholderText}>알림 설정 기능 준비 중</Text>
-          </View>
+          <SettingsTab 
+            isPremium={currentUser?.is_premium ?? false} // 유저의 프리미엄 상태 전달
+            onUpgradePress={() => setShowPremiumModal(true)} // 업그레이드 모달 띄우는 함수 전달
+          
+            members={members as Member[]}
+            onUpdateMemberSetting={handleUpdateMemberSetting}
+          />
         )}
 
         {/* 탭 3: 프로필 */}
         {activeTab === 'profile' && (
           <ProfileTab 
-            userInfo={userInfo}
+            userInfo={currentUser}
             onLogout={onBack}
             onDeleteAccount={deleteAccount}
             onUpgrade={() => setShowPremiumModal(true)}

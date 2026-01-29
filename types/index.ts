@@ -17,6 +17,10 @@ export interface Profile {
   role: UserRole;                     // 사용자 역할
   name: string;                       // 이름
   phone: string;                      // 전화번호
+  is_premium?: boolean;               // 프리미엄 회원 여부
+  is_admin?: boolean;                 // 관리자 권한
+  premium_started_at?: string | null; // 프리미엄 결제 시작일 (Timestamp)
+  settings?: UserSettings | null;     // 개인 맞춤 설정 (JSON)
   
   // Member 전용 필드 (Manager는 null)
   pairing_code?: string | null;       // 6자리 페어링 코드
@@ -31,9 +35,6 @@ export interface Profile {
   last_seen_at?: string | null;       // 마지막 안부 신고 시간
   emergency_contacts?: string[];      // [보완] 비상연락망 (배열)
   
-  // 기존 기능 유지 (선택사항)
-  is_premium?: boolean;               // 프리미엄 회원 여부
-  is_admin?: boolean;                 // 관리자 권한
   
   // 시스템 필드
   created_at?: string;                // 생성 시간
@@ -129,4 +130,16 @@ export function isManager(profile: Profile): profile is Manager {
  */
 export function isMember(profile: Profile): profile is Member {
   return profile.role === 'member';
+}
+
+/**
+ * 사용자 설정 (JSONB)
+ */
+export interface UserSettings {
+  checkInMethod?: '클릭' | '수학(EASY)' | '수학(HARD)' | '사진인증' | '흔들기'; 
+  alertCycle?: number;  // 48, 72, 96 등
+  
+  // (매니저용 - 나중에 쓸 수도 있음)
+  pushEnabled?: boolean;
+  smsEnabled?: boolean;
 }
