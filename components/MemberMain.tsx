@@ -4,14 +4,16 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { LogOut, Heart } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useUserManagement } from '../hooks/useUserManagement';
+import { UserInfo } from '../types';
 
 interface MemberMainProps {
   onBack: () => void;
+  userInfo: UserInfo;
 }
 
-export function MemberMain({ onBack }: MemberMainProps) {
+export function MemberMain({ onBack, userInfo }: MemberMainProps) {
   // 🔥 [수정 1] loadUser 함수도 같이 가져옵니다.
-  const { userInfo, loadUser } = useUserManagement();
+  const { loadUser } = useUserManagement();
   
   const [hasCheckedIn, setHasCheckedIn] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -109,6 +111,9 @@ export function MemberMain({ onBack }: MemberMainProps) {
           <Text style={styles.greeting}>안녕하세요,</Text>
           <Text style={styles.name}>{displayName}님!</Text>
         </View>
+
+        <Text style={styles.subText}>환영합니다, {userInfo.name}님!</Text>
+
         <TouchableOpacity onPress={onBack} style={styles.logoutButton}>
           <LogOut color="#6b7280" size={24} />
         </TouchableOpacity>
@@ -174,4 +179,10 @@ const styles = StyleSheet.create({
   touchArea: { width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' },
   mainButtonText: { color: 'white', fontSize: 28, fontWeight: 'bold', textAlign: 'center', lineHeight: 40 },
   infoText: { fontSize: 18, color: '#9ca3af', textAlign: 'center', lineHeight: 28 },
+  subText: {
+    fontSize: 16,
+    marginTop: 10,
+    color: '#666',
+    textAlign: 'center', // 가운데 정렬도 추가하면 예쁩니다
+  },
 });

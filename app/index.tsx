@@ -76,24 +76,23 @@ export default function Index() {
     );
   }
 
-  // ✅ [수정] 로그인 된 유저 처리
+  // ✅ 1. 로그인되어 있는데 전화번호가 없는 경우 (소셜 가입 마무리)
+  if (userInfo && !userInfo.phone) {
+    return (
+      <AuthManager 
+        onBack={handleLogout} 
+        initialMode="social_finish" 
+        socialUser={userInfo} 
+        onSuccess={() => loadUser()} // 👈 [핵심] 성공 시 유저 정보 다시 불러와서 메인으로 이동
+      />
+    );
+  }
+  // ✅ 2. 로그인도 됐고, 전화번호도 있다? -> 메인 화면으로 입장!
   if (userInfo) {
-    // 🛑 1. 전화번호가 없으면 -> AuthManager를 'social_finish' 모드로 보여줌!
-    if (!userInfo.phone) {
-      return (
-        <AuthManager 
-          onBack={handleLogout} // 뒤로가기 누르면 로그아웃(처음부터 다시)
-          initialMode="social_finish" // 👈 "추가 정보 입력 모드" 발동
-          socialUser={userInfo}       // 👈 현재 정보(이름 등) 넘겨줌
-        />
-      );
-    }
-
-    // ✅ 2. 전화번호도 있으면 -> 정상적으로 메인 화면 진입
     if (userInfo.role === 'member') {
-      return <MemberMain onBack={handleLogout} />; 
+      return <MemberMain onBack={handleLogout} userInfo={userInfo!} />; 
     }
-    return <ManagerMain userInfo={userInfo} onBack={handleLogout} />;
+    return <ManagerMain userInfo={userInfo!} onBack={handleLogout} />;
   }
 
   // ❌ [상태 2] 로그인 전 화면 분기
@@ -216,6 +215,7 @@ export default function Index() {
     return (
       <AuthManager 
         onBack={() => setCurrentView('login_method')} // 뒤로가기 시 방식 선택으로
+        onSuccess={() => loadUser()}
       />
     );
   }

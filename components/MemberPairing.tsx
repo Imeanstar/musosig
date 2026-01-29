@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Dimensions, SafeAreaView } from 'react-native';
-import { ChevronLeft, Delete, Check } from 'lucide-react-native';
+// 👇 1. 필요한 아이콘과 라이브러리 추가
+import { ChevronLeft, Delete, Check, ClipboardPaste } from 'lucide-react-native';
+import * as Clipboard from 'expo-clipboard'; 
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { useUserManagement } from '../hooks/useUserManagement';
 
@@ -15,8 +18,34 @@ export function MemberPairing({ onPairingComplete, onBack }: MemberPairingProps)
   const { userInfo } = useUserManagement();
   const [code, setCode] = useState<string[]>(['', '', '', '', '', '']);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // 👇 2. 안전 영역 높이 가져오기
+  const insets = useSafeAreaInsets();
 
   const isComplete = code.every(c => c !== '');
+
+  // 📋 [추가됨] 붙여넣기 기능
+  const handlePaste = async () => {
+    const text = await Clipboard.getStringAsync();
+    // 숫자만 남기고 제거
+    const numbersOnly = text.replace(/[^0-9]/g, '');
+
+    if (numbersOnly.length === 0) {
+      Alert.alert("알림", "복사된 내용에 숫자가 없습니다.");
+      return;
+    }
+
+    // 6자리로 자르고 배열로 변환
+    const newCodeArr = numbersOnly.slice(0, 6).split('');
+    
+    // 6자리가 안 되면 나머지는 빈칸으로 채우기
+    while (newCodeArr.length < 6) {
+      newCodeArr.push('');
+    }
+
+    setCode(newCodeArr);
+    Alert.alert("성공", "코드를 붙여넣었습니다! 😊");
+  };
 
   // 기존 검증 로직 유지 (이름 복구 로직 포함)
   const verifyAndLink = async () => {
@@ -85,7 +114,6 @@ export function MemberPairing({ onPairingComplete, onBack }: MemberPairingProps)
         });
         if (rpcError) throw rpcError;
 
-        // 이름 복구 로직 (3중 체크)
         const officialName = targetUser.name ? String(targetUser.name) : '';
         const nickname = targetUser.nickname ? String(targetUser.nickname) : '';
         const pendingName = targetUser.pending_member_nickname ? String(targetUser.pending_member_nickname) : '';
@@ -157,6 +185,12 @@ export function MemberPairing({ onPairingComplete, onBack }: MemberPairingProps)
                 </View>
               ))}
             </View>
+
+            {/* 👇 3. [추가됨] 붙여넣기 버튼 */}
+            <TouchableOpacity style={styles.pasteButton} onPress={handlePaste}>
+               <ClipboardPaste size={18} color="#6b7280" />
+               <Text style={styles.pasteText}>복사한 코드 붙여넣기</Text>
+            </TouchableOpacity>
           </View>
 
           {/* 키패드 영역 */}
@@ -179,8 +213,9 @@ export function MemberPairing({ onPairingComplete, onBack }: MemberPairingProps)
 
         </View>
 
-        {/* 하단 버튼 영역 (고정) */}
-        <View style={styles.footer}>
+        {/* 하단 버튼 영역 */}
+        {/* 👇 4. [수정됨] insets.bottom을 적용하여 가림 현상 해결 */}
+        <View style={[styles.footer, { paddingBottom: insets.bottom + 20 }]}>
           <TouchableOpacity 
             style={[styles.submitBtn, !isComplete && styles.submitBtnDisabled]} 
             onPress={verifyAndLink}
@@ -191,7 +226,7 @@ export function MemberPairing({ onPairingComplete, onBack }: MemberPairingProps)
           </TouchableOpacity>
         </View>
 
-        {/* 🔥 로딩 오버레이 (가장 위에 뜸 - zIndex 활용) */}
+        {/* 로딩 오버레이 */}
         {isLoading && (
           <View style={styles.loadingOverlay}>
             <View style={styles.loadingBox}>
@@ -210,13 +245,13 @@ export function MemberPairing({ onPairingComplete, onBack }: MemberPairingProps)
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#fff7ed' },
-  container: { flex: 1, position: 'relative' }, // relative 설정 (오버레이 위치 기준)
+  container: { flex: 1, position: 'relative' }, 
   
-  backBtn: { marginTop: 10, marginLeft: 20, padding: 10, alignSelf: 'flex-start' },
+  backBtn: { marginTop: 40, marginLeft: 20, padding: 10, alignSelf: 'flex-start' },
   
   content: { 
-    flex: 1, // 남은 공간을 다 씀
-    justifyContent: 'space-evenly', // 내용물끼리 적당히 떨어짐
+    flex: 1, 
+    justifyContent: 'space-evenly', 
     alignItems: 'center',
     paddingBottom: 20 
   },
@@ -236,6 +271,16 @@ const styles = StyleSheet.create({
   codeBoxActive: { borderColor: '#ea580c', backgroundColor: '#fff' },
   codeText: { fontSize: 24, fontWeight: 'bold', color: '#333' },
 
+  // 👇 [추가됨] 붙여넣기 버튼 스타일
+  pasteButton: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.6)', 
+    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20,
+    marginTop: 20,
+    borderWidth: 1, borderColor: '#fed7aa'
+  },
+  pasteText: { marginLeft: 8, fontSize: 16, color: '#4b5563', fontWeight: '600' },
+
   // 키패드 영역
   keypadSection: { justifyContent: 'center', alignItems: 'center' },
   keypad: { 
@@ -243,7 +288,7 @@ const styles = StyleSheet.create({
     gap: 14, justifyContent: 'center', width: 320 
   },
   keyBtn: { 
-    width: 75, height: 75, // 크기 살짝 조절
+    width: 75, height: 75, 
     backgroundColor: 'white', justifyContent: 'center', alignItems: 'center', 
     borderRadius: 40, 
     elevation: 2, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, shadowOffset: {width:0, height:2} 
@@ -251,8 +296,8 @@ const styles = StyleSheet.create({
   keyText: { fontSize: 30, fontWeight: 'bold', color: '#333' },
   delBtn: { backgroundColor: '#fee2e2' },
 
-  // 하단 버튼
-  footer: { padding: 20, paddingBottom: 30 },
+  // 하단 버튼 (패딩은 인라인 스타일로 동적 적용)
+  footer: { paddingHorizontal: 20 },
   submitBtn: { 
     backgroundColor: '#ea580c', height: 60, borderRadius: 16, 
     flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
@@ -261,13 +306,13 @@ const styles = StyleSheet.create({
   submitBtnDisabled: { backgroundColor: '#fed7aa', shadowOpacity: 0, elevation: 0 },
   submitBtnText: { color: 'white', fontSize: 20, fontWeight: 'bold' },
 
-  // 🔥 로딩 오버레이 스타일
+  // 로딩 오버레이
   loadingOverlay: {
-    position: 'absolute', // 둥둥 떠있음
+    position: 'absolute',
     top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)', // 반투명 배경
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
     justifyContent: 'center', alignItems: 'center',
-    zIndex: 999, // 제일 위에 보임
+    zIndex: 999,
   },
   loadingBox: {
     backgroundColor: 'white', padding: 24, borderRadius: 16,

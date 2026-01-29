@@ -1,63 +1,70 @@
 import React, { useState, useEffect } from 'react';
 import { 
   View, Text, TextInput, TouchableOpacity, StyleSheet, 
-  KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator 
+  KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, Alert
 } from 'react-native';
-import { ChevronLeft, Mail, Lock, User, Phone, CheckCircle, AlertCircle } from 'lucide-react-native';
+import { ChevronLeft, Mail, Lock, User, Phone } from 'lucide-react-native';
 import { useUserManagement } from '../hooks/useUserManagement';
 import { UserInfo } from '../types';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface AuthManagerProps {
   onBack: () => void;
-  initialMode?: 'login' | 'signup' | 'social_finish'; // 👈 모드 추가
-  socialUser?: UserInfo | null; // 👈 소셜 유저 정보 받기
+  initialMode?: 'login' | 'signup' | 'social_finish';
+  socialUser?: UserInfo | null;
+  onSuccess?: () => void; // 👈 [핵심] 성공하면 실행할 함수 (부모한테 알림)
 }
 
-export function AuthManager({ onBack, initialMode = 'login', socialUser }: AuthManagerProps) {
+export function AuthManager({ onBack, initialMode = 'login', socialUser, onSuccess }: AuthManagerProps) {
   const { 
-    loginWithEmail, signUpWithEmail, updateSocialUserInfo, // 👈 추가된 함수
+    loginWithEmail, signUpWithEmail, updateSocialUserInfo,
     isLoading, setIsLoading 
   } = useUserManagement();
-
-  // 모드 설정 (기본값 or 소셜마무리)
+  const insets = useSafeAreaInsets();
   const [mode, setMode] = useState<'login' | 'signup' | 'social_finish'>(initialMode);
-
-  // 입력 상태 (소셜 유저면 미리 채워넣기)
-  const [email, setEmail] = useState(socialUser?.name ? '' : ''); // 소셜은 이메일 대신 ID를 쓸수도 있어서 일단 비움 or socialUser.email 있다면 사용
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName] = useState(socialUser?.name || ''); // 👈 이름 자동 입력
+  const [name, setName] = useState(socialUser?.name || '');
   const [phone, setPhone] = useState(socialUser?.phone || '');
 
-  // 화면 켜지면 로딩 끄기
   useEffect(() => {
     setIsLoading(false);
   }, []);
 
-  // 유효성 검사
   const isValidEmail = email.includes('@');
   const isValidPw = password.length >= 6;
   const isValidName = name.trim().length >= 2;
   const isValidPhone = phone.replace(/-/g, '').length >= 10;
 
-  // 제출 가능 조건
   const canSubmit = () => {
     if (mode === 'login') return isValidEmail && isValidPw;
     if (mode === 'signup') return isValidEmail && isValidPw && isValidName && isValidPhone;
-    if (mode === 'social_finish') return isValidName && isValidPhone; // 👈 소셜은 이름/전화번호만 봄
+    if (mode === 'social_finish') return isValidName && isValidPhone;
     return false;
   };
 
   const handleSubmit = async () => {
     if (!canSubmit()) return;
 
+    let success = false;
+
     if (mode === 'login') {
-      await loginWithEmail(email, password);
+      success = await loginWithEmail(email, password);
     } else if (mode === 'signup') {
-      await signUpWithEmail(email, password, name, phone);
+      success = await signUpWithEmail(email, password, name, phone);
     } else if (mode === 'social_finish') {
-      // 🆕 소셜 추가 정보 저장
-      const success = await updateSocialUserInfo(phone, name);
-      // 성공하면 index.tsx에서 자동으로 메인으로 이동시킴
+        if (socialUser?.id) {
+            success = await updateSocialUserInfo(socialUser.id, phone, name);
+          } else {
+            // 혹시라도 id가 없으면 에러 처리
+            Alert.alert("오류", "사용자 정보를 찾을 수 없습니다.");
+            return;
+          }
+    }   
+
+    // 🚀 [핵심] 성공했다면 부모 컴포넌트(Index)에게 "새로고침해!"라고 알림
+    if (success && onSuccess) {
+      onSuccess();
     }
   };
 
@@ -66,18 +73,33 @@ export function AuthManager({ onBack, initialMode = 'login', socialUser }: AuthM
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
-      <View style={styles.header}>
-        {/* 소셜 모드일 땐 뒤로가기 없애거나 로그아웃 처리 해야함 (여기선 일단 둠) */}
-        <TouchableOpacity onPress={onBack} style={styles.backBtn}>
-          <ChevronLeft size={28} color="#333" />
-        </TouchableOpacity>
+      <View style={[
+        styles.header, 
+        { 
+          paddingTop: insets.top > 0 ? insets.top : 20, // 상태바 높이만큼 내리기 (없으면 기본 20)
+          height: 60 + (insets.top > 0 ? insets.top : 20) // 전체 높이도 그만큼 늘려주기
+        }
+      ]}>
+        {/* 뒤로가기 버튼 (소셜 완료 모드 아닐 때만 노출) */}
+        {mode !== 'social_finish' ? (
+          <TouchableOpacity onPress={onBack} style={styles.backBtn}>
+            <ChevronLeft size={28} color="#333" />
+          </TouchableOpacity>
+        ) : (
+          // 소셜 완료 모드일 땐 뒤로가기 대신 빈 공간 or 로그아웃 버튼을 두는 게 좋음
+          <View style={{ width: 44 }} /> 
+        )}
+        
         <Text style={styles.headerTitle}>
           {mode === 'login' ? '이메일로 로그인' : 
            mode === 'signup' ? '새 계정 만들기' : '추가 정보 입력'}
         </Text>
+        {/* 타이틀 정렬을 위한 더미 뷰 */}
+        <View style={{ width: 44 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
+        {/* ... (이전과 동일한 폼 내용 생략) ... */}
         
         {/* 탭 전환 (소셜 모드일 땐 숨김) */}
         {mode !== 'social_finish' && (
@@ -192,7 +214,13 @@ export function AuthManager({ onBack, initialMode = 'login', socialUser }: AuthM
               </Text>
             )}
           </TouchableOpacity>
-
+          {/* 👇 [추가] 버튼이 비활성화된 이유를 작게 보여줍니다 */}
+          {!canSubmit() && mode === 'social_finish' && (
+             <View style={{ marginTop: 10, alignItems: 'center' }}>
+               {!isValidName && <Text style={{ color: '#ef4444', fontSize: 13 }}>* 이름을 입력해주세요 (2글자 이상)</Text>}
+               {!isValidPhone && <Text style={{ color: '#ef4444', fontSize: 13 }}>* 전화번호를 입력해주세요</Text>}
+             </View>
+          )}
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -202,11 +230,15 @@ export function AuthManager({ onBack, initialMode = 'login', socialUser }: AuthM
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
   header: { 
-    flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, 
-    height: 60, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' 
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', // 정렬 수정
+    paddingHorizontal: 16, 
+    height: 60, 
+    borderBottomWidth: 1, borderBottomColor: '#f3f4f6',
+    paddingTop: 8 // 👈 [요청 반영] 상단 패딩 추가
   },
-  backBtn: { padding: 8, marginRight: 8 },
+  backBtn: { padding: 8 },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#1f2937' },
+  // ... (나머지 스타일은 동일)
   content: { padding: 24 },
   tabContainer: { 
     flexDirection: 'row', backgroundColor: '#f3f4f6', borderRadius: 12, padding: 4, marginBottom: 32 
