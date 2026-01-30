@@ -30,8 +30,8 @@
           "data": [
             {
               "scheme": "musosik",
-              "host":"auth",
-              "paht":"/callback"
+              "host": "auth",
+              "paht": "/callback"
             }
           ],
           "category": [
@@ -66,7 +66,8 @@
             "targetSdkVersion": 35
           }
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "extra": {
       "eas": {

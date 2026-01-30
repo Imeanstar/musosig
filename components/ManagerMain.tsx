@@ -17,6 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { ChevronLeft, ChevronRight, Plus, Settings, 
   User, Crown, RefreshCw, Camera } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { supabase } from '@/lib/supabase';
 import * as Clipboard from 'expo-clipboard';
 
@@ -398,6 +399,16 @@ export function ManagerMain({ onBack, userInfo }: ManagerMainProps) {
           
             members={members as Member[]}
             onUpdateMemberSetting={handleUpdateMemberSetting}
+
+            managerSettings={userInfo.settings || {}} // 내 설정 전달
+              onUpdateManagerSettings={async (newSettings) => {
+                 // 즉시 DB에 저장
+                 await supabase
+                   .from('users')
+                   .update({ settings: newSettings })
+                   .eq('id', userInfo.id);
+
+              }}
           />
         )}
 

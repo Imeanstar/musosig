@@ -144,4 +144,9 @@ export interface UserSettings {
   // (매니저용 - 나중에 쓸 수도 있음)
   pushEnabled?: boolean;
   smsEnabled?: boolean;
+
+  // 🔥 [NEW] 방해금지 설정 추가
+  dndEnabled?: boolean;   // 방해금지 켜짐 여부
+  dndStartTime?: string;  // 시작 시간 (예: "23:00")
+  dndEndTime?: string;    // 종료 시간 (예: "07:00")
 }

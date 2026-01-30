@@ -47,14 +47,14 @@ export function MemberPairing({ onPairingComplete, onBack }: MemberPairingProps)
     Alert.alert("성공", "코드를 붙여넣었습니다! 😊");
   };
 
-  // 기존 검증 로직 유지 (이름 복구 로직 포함)
+  // 기존 검증 로직 유지 (이름 업데이트 추가됨 ✨)
   const verifyAndLink = async () => {
     const fullCode = code.join('');
     if (!isComplete) return;
 
     setIsLoading(true);
     try {
-      // 1. 현재 로그인된 유저 ID 가져오기 (없으면 익명 로그인)
+      // 1. 현재 로그인된 유저 ID 가져오기
       let currentUserId = userInfo?.id;
       if (!currentUserId) {
         const { data: authData, error: authError } = await supabase.auth.signInAnonymously();
@@ -62,10 +62,10 @@ export function MemberPairing({ onPairingComplete, onBack }: MemberPairingProps)
         currentUserId = authData.user.id;
       }
 
-      // 2. 코드 주인(대상) 찾기
+      // 2. 코드 주인(매니저) 찾기
       const { data: targetUser, error: searchError } = await supabase
         .from('users')
-        .select('*') // 모든 정보 다 가져옴
+        .select('*')
         .eq('pairing_code', fullCode)
         .maybeSingle();
 
@@ -77,32 +77,37 @@ export function MemberPairing({ onPairingComplete, onBack }: MemberPairingProps)
 
       // 3. 상황별 분기 처리
 
-      // [Case A] 매니저와 처음 연결하는 경우 (targetUser가 매니저임)
+      // [Case A] 매니저와 처음 연결하는 경우 (신규 가입)
       if (targetUser.role === 'manager') {
+        
+        // 🔥 [수정됨] 매니저가 설정한 애칭을 내 이름으로 가져오기!
         const { error: updateError } = await supabase.from('users').update({ 
             role: 'member',
             manager_id: targetUser.id,
+            
+            // 👇 여기가 핵심입니다!
+            name: targetUser.pending_member_nickname || '가족', 
+            nickname: targetUser.pending_member_nickname,
+            relation_tag: targetUser.pending_member_relation,
+            
             updated_at: new Date()
         }).eq('id', currentUserId); // 내 정보를 업데이트
 
         if (updateError) throw updateError;
         
-        // 🚀 전화번호가 없으면 입력 페이지로 가야 함 (여기선 일단 성공 처리하고, Main에서 체크 추천)
+        // 성공 후 이동
         onPairingComplete(targetUser.name);
       } 
       
-      // [Case B] 기존 멤버 계정을 복구하는 경우 (targetUser가 멤버임)
+      // [Case B] 기존 멤버 계정을 복구하는 경우 (재연결)
       else if (targetUser.role === 'member') {
-        
-        // 🔥 여기가 핵심! SQL 함수 호출 (중복 에러 없이 영혼 체인지)
         const { error: rpcError } = await supabase.rpc('migrate_member_history', {
-          old_member_id: targetUser.id,  // 코드 주인의 ID (뺏길 놈)
-          new_member_id: currentUserId   // 지금 내 ID (뺏을 놈)
+          old_member_id: targetUser.id,  
+          new_member_id: currentUserId   
         });
 
         if (rpcError) throw rpcError;
 
-        // 성공! (전화번호도 같이 넘어왔으므로 입력창 갈 필요 없음)
         Alert.alert('재연결 성공', `"${targetUser.name}"님의 기록을 모두 불러왔습니다!`, [
           { text: '시작하기', onPress: () => onPairingComplete('보호자') }
         ]);
@@ -110,7 +115,7 @@ export function MemberPairing({ onPairingComplete, onBack }: MemberPairingProps)
 
     } catch (e: any) {
       console.error("Pairing Error:", e);
-      Alert.alert('오류', '연결 중 문제가 발생했습니다. 다시 시도해주세요.');
+      Alert.alert('오류', '연결 중 문제가 발생했습니다.');
     } finally {
       setIsLoading(false);
     }

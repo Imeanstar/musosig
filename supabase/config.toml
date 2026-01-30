@@ -9,3 +9,47 @@ entrypoint = "./functions/check-48h-inactivity/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/check-48h-inactivity/*.html" ]
+
+[functions.cleanup-data]
+enabled = true
+verify_jwt = true
+import_map = "./functions/cleanup-data/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/cleanup-data/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/cleanup-data/*.html" ]
+
+[functions.daily-nudge-21h]
+enabled = true
+verify_jwt = true
+import_map = "./functions/daily-nudge-21h/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/daily-nudge-21h/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/daily-nudge-21h/*.html" ]
+
+[functions.manager-alert-half]
+enabled = true
+verify_jwt = true
+import_map = "./functions/manager-alert-half/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/manager-alert-half/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/manager-alert-half/*.html" ]
+
+[functions.emergency-sms-flag]
+enabled = true
+verify_jwt = true
+import_map = "./functions/emergency-sms-flag/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/emergency-sms-flag/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/emergency-sms-flag/*.html" ]

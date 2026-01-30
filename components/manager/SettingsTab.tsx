@@ -1,23 +1,27 @@
 /**
- * SettingsTab.tsx (v2.0 - Member Specific Settings)
- * - 상단: 매니저 앱 자체 설정 (알림, 방해금지)
- * - 하단: 멤버별 설정 리스트 -> 클릭 시 개별 설정 모달
+ * SettingsTab.tsx (v2.1 - Fix DnD Error)
+ * - 매니저 앱 자체 설정 (방해금지 포함) 상태 관리 추가
+ * - 멤버별 설정 리스트 및 모달
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, Text, StyleSheet, ScrollView, Switch, TouchableOpacity, 
-  Alert, Modal, TouchableWithoutFeedback, FlatList
+  Alert, Modal, FlatList
 } from 'react-native';
 import { ChevronRight, ChevronLeft, Check, User as UserIcon, X } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Member } from '../../types'; // 타입 불러오기
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { Member, UserSettings } from '../../types'; // 타입 불러오기
 
 interface SettingsTabProps {
   isPremium: boolean;
   onUpgradePress: () => void;
-  members: Member[]; // 멤버 리스트 받기
-  onUpdateMemberSetting: (memberId: string, settings: any) => void; // 부모에게 변경 요청
+  members: Member[];
+  onUpdateMemberSetting: (memberId: string, settings: any) => void;
+  // 🔥 [NEW] 매니저 본인의 설정을 저장하는 함수 (부모에서 받아옴)
+  onUpdateManagerSettings?: (settings: UserSettings) => void;
+  managerSettings?: UserSettings; // 매니저 본인의 현재 설정
 }
 
 const CHECK_IN_OPTIONS = [
@@ -30,40 +34,54 @@ const CHECK_IN_OPTIONS = [
 
 const ALERT_CYCLES = [48, 72, 96]; 
 
-export function SettingsTab({ isPremium, onUpgradePress, members, onUpdateMemberSetting }: SettingsTabProps) {
-  // --- 매니저 앱 설정 상태 ---
-  const [pushEnabled, setPushEnabled] = useState(true);
-  const [smsEnabled, setSmsEnabled] = useState(true);
-  const [dndStart, setDndStart] = useState('22시');
-  const [dndEnd, setDndEnd] = useState('08시');
+export function SettingsTab({ 
+  isPremium, 
+  onUpgradePress, 
+  members, 
+  onUpdateMemberSetting,
+  onUpdateManagerSettings,
+  managerSettings = {} // 기본값
+}: SettingsTabProps) {
 
-  // --- 개별 설정을 위한 상태 ---
-  const [selectedMember, setSelectedMember] = useState<Member | null>(null); // 현재 설정 중인 멤버
+  // --- [1] 매니저 앱 설정 상태 (방해금지 등) ---
+  // 🔥 tempSettings 선언 (에러 해결!)
+  const [tempSettings, setTempSettings] = useState<UserSettings>(managerSettings);
+  const [showTimePicker, setShowTimePicker] = useState<'start' | 'end' | null>(null);
+
+  // 부모로부터 받은 설정이 바뀌면 동기화
+  useEffect(() => {
+    setTempSettings(managerSettings);
+  }, [managerSettings]);
+
+  // 매니저 설정 변경 시 즉시 저장 요청 (Debounce 적용하면 더 좋지만 일단 즉시 반영)
+  useEffect(() => {
+    if (onUpdateManagerSettings) {
+       onUpdateManagerSettings(tempSettings);
+    }
+  }, [tempSettings]);
+
+
+  // --- [2] 멤버별 설정을 위한 상태 ---
+  const [selectedMember, setSelectedMember] = useState<Member | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  
-  // 모달 내부 임시 상태 (저장 버튼 누르기 전까지)
   const [tempMethod, setTempMethod] = useState('클릭');
   const [tempCycleIndex, setTempCycleIndex] = useState(0);
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false); // 모달 내부 드롭다운
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
-  // 멤버 클릭 시 설정창 열기
+
+  // 멤버 설정 열기
   const openMemberSettings = (member: Member) => {
-    if (!isPremium) {
-       // 프리미엄 아니면 잠금 오버레이가 이미 보여주고 있으므로 동작 X (또는 안내)
-       return; 
-    }
+    if (!isPremium) return;
     
     setSelectedMember(member);
-    // 멤버의 기존 설정 불러오기 (없으면 기본값)
     setTempMethod(member.settings?.checkInMethod || '클릭');
     const currentCycle = member.settings?.alertCycle || 48;
     const idx = ALERT_CYCLES.indexOf(currentCycle);
     setTempCycleIndex(idx >= 0 ? idx : 0);
-    
     setIsModalOpen(true);
   };
 
-  // 설정 저장
+  // 멤버 설정 저장
   const saveMemberSettings = () => {
     if (selectedMember) {
       const newSettings = {
@@ -82,9 +100,6 @@ export function SettingsTab({ isPremium, onUpgradePress, members, onUpdateMember
     else setTempCycleIndex(prev => Math.min(ALERT_CYCLES.length - 1, prev + 1));
   };
 
-  const showNotImplemented = (feature: string) => {
-    Alert.alert("알림", `${feature} 기능은 추후 업데이트 예정입니다.`);
-  };
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -98,50 +113,115 @@ export function SettingsTab({ isPremium, onUpgradePress, members, onUpdateMember
         <Text style={styles.cardTitle}>알림 수신 설정</Text>
         <View style={styles.halfContainer}>
           <View style={styles.halfItem}>
-            <Text style={styles.label}>알림</Text>
+            <Text style={styles.label}>앱 알림</Text>
             <Switch
               trackColor={{ false: "#e5e7eb", true: "#3b82f6" }}
               thumbColor={"white"}
-              value={pushEnabled}
-              onValueChange={setPushEnabled}
+              value={tempSettings.pushEnabled ?? true}
+              onValueChange={(val) => setTempSettings(prev => ({ ...prev, pushEnabled: val }))}
               style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }} 
             />
           </View>
           <View style={styles.halfItem}>
-            <Text style={styles.label}>문자</Text>
+            <Text style={styles.label}>문자 알림</Text>
             <Switch
               trackColor={{ false: "#e5e7eb", true: "#1f2937" }}
               thumbColor={"white"}
-              value={smsEnabled}
-              onValueChange={setSmsEnabled}
+              value={tempSettings.smsEnabled ?? true}
+              onValueChange={(val) => setTempSettings(prev => ({ ...prev, smsEnabled: val }))}
               style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
             />
           </View>
         </View>
       </View>
 
+      {/* 방해금지 섹션 (카드 분리) */}
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>방해금지 시간</Text>
-        <View style={styles.timePickerContainer}>
-          <TouchableOpacity style={styles.dropdownBtn} onPress={() => showNotImplemented('시간 선택')}>
-            <Text style={styles.dropdownText}>{dndStart}</Text>
-          </TouchableOpacity>
-          <Text style={styles.tilde}>~</Text>
-          <TouchableOpacity style={styles.dropdownBtn} onPress={() => showNotImplemented('시간 선택')}>
-            <Text style={styles.dropdownText}>{dndEnd}</Text>
-          </TouchableOpacity>
+        <View style={styles.settingItem}>
+            <View style={styles.settingTextCol}>
+              <Text style={styles.settingLabel}>방해금지 시간</Text>
+              <Text style={styles.settingDesc}>
+                설정한 시간에는 알림을 받지 않습니다.{'\n'}(주무시는 시간에 설정해보세요)
+              </Text>
+            </View>
+            <Switch
+              trackColor={{ false: '#767577', true: '#3b82f6' }}
+              thumbColor={'#f4f3f4'}
+              value={tempSettings.dndEnabled ?? false}
+              onValueChange={(val) => setTempSettings(prev => ({ ...prev, dndEnabled: val }))}
+            />
         </View>
+
+        {/* 방해금지 시간이 켜져있을 때만 시간 선택기 표시 */}
+        {tempSettings.dndEnabled && (
+          <View style={styles.dndTimeContainer}>
+            <TouchableOpacity 
+              style={styles.timeButton} 
+              onPress={() => setShowTimePicker('start')}
+            >
+              <Text style={styles.timeLabel}>시작</Text>
+              <Text style={styles.timeValue}>
+                {tempSettings.dndStartTime || '23:00'}
+              </Text>
+            </TouchableOpacity>
+            
+            <Text style={{ color: '#9ca3af' }}>~</Text>
+
+            <TouchableOpacity 
+              style={styles.timeButton} 
+              onPress={() => setShowTimePicker('end')}
+            >
+              <Text style={styles.timeLabel}>종료</Text>
+              <Text style={styles.timeValue}>
+                {tempSettings.dndEndTime || '07:00'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
+      {/* DateTimePicker */}
+      {showTimePicker && (
+        <DateTimePicker
+          value={(() => {
+            const now = new Date();
+            const [hours, minutes] = (
+              showTimePicker === 'start' 
+                ? (tempSettings.dndStartTime || '23:00') 
+                : (tempSettings.dndEndTime || '07:00')
+            ).split(':').map(Number);
+            now.setHours(hours, minutes);
+            return now;
+          })()}
+          mode="time"
+          is24Hour={true}
+          display="spinner"
+          onChange={(event, selectedDate) => {
+            const type = showTimePicker;
+            setShowTimePicker(null);
+            
+            if (event.type === 'set' && selectedDate) {
+              const hours = String(selectedDate.getHours()).padStart(2, '0');
+              const minutes = String(selectedDate.getMinutes()).padStart(2, '0');
+              const timeString = `${hours}:${minutes}`;
+              
+              setTempSettings(prev => ({
+                ...prev,
+                [type === 'start' ? 'dndStartTime' : 'dndEndTime']: timeString
+              }));
+            }
+          }}
+        />
+      )}
 
-      {/* ================= 섹션 2: 멤버별 케어 설정 (프리미엄) ================= */}
+
+      {/* ================= 섹션 2: 멤버별 케어 설정 ================= */}
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>멤버별 맞춤 케어</Text>
         <Text style={styles.sectionSubtitle}>멤버를 눌러 개별 설정을 변경하세요.</Text>
       </View>
 
       <View style={styles.premiumSectionContainer}>
-        
         {/* 멤버 리스트 카드 */}
         <View style={[styles.card, { padding: 0, overflow: 'hidden' }]}>
           {members.length === 0 ? (
@@ -166,7 +246,6 @@ export function SettingsTab({ isPremium, onUpgradePress, members, onUpdateMember
                   </View>
                   <View style={{ marginLeft: 12 }}>
                     <Text style={styles.memberName}>{member.name}</Text>
-                    {/* 현재 설정 요약 뱃지 */}
                     <View style={{ flexDirection: 'row', marginTop: 4 }}>
                       <View style={styles.miniBadge}>
                         <Text style={styles.miniBadgeText}>
@@ -218,8 +297,6 @@ export function SettingsTab({ isPremium, onUpgradePress, members, onUpdateMember
       >
         <View style={styles.modalOverlay}>
           <View style={styles.settingsModalContent}>
-            
-            {/* 모달 헤더 */}
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{selectedMember?.name}님 케어 설정</Text>
               <TouchableOpacity onPress={() => setIsModalOpen(false)}>
@@ -228,7 +305,7 @@ export function SettingsTab({ isPremium, onUpgradePress, members, onUpdateMember
             </View>
 
             <ScrollView>
-              {/* 1. 인증 방식 선택 */}
+              {/* 인증 방식 */}
               <Text style={styles.settingLabel}>출석 인증 방식</Text>
               <TouchableOpacity 
                 style={styles.selectorBtn} 
@@ -239,7 +316,7 @@ export function SettingsTab({ isPremium, onUpgradePress, members, onUpdateMember
                 </Text>
                 <ChevronRight size={24} color="#9ca3af" style={{ transform: [{ rotate: '90deg' }] }} />
               </TouchableOpacity>
-              {/* 드롭다운 (펼쳐짐) - 간단하게 모달 안에 조건부 렌더링으로 구현 */}
+              
               {isDropdownOpen && (
                 <View style={styles.dropdownList}>
                   {CHECK_IN_OPTIONS.map((opt) => (
@@ -263,10 +340,9 @@ export function SettingsTab({ isPremium, onUpgradePress, members, onUpdateMember
                 </View>
               )}
 
-
               <View style={{ height: 24 }} />
 
-              {/* 2. 알림 주기 설정 */}
+              {/* 알림 주기 */}
               <View>
                 <Text style={styles.settingLabel}>비상 알림 골든타임</Text>
                 <Text style={styles.guideText}>
@@ -302,7 +378,6 @@ export function SettingsTab({ isPremium, onUpgradePress, members, onUpdateMember
               </View>
             </ScrollView>
 
-            {/* 저장 버튼 */}
             <TouchableOpacity style={styles.saveBtn} onPress={saveMemberSettings}>
               <Text style={styles.saveBtnText}>저장하기</Text>
             </TouchableOpacity>
@@ -315,6 +390,7 @@ export function SettingsTab({ isPremium, onUpgradePress, members, onUpdateMember
   );
 }
 
+// 스타일은 민성님이 보내주신 그대로 유지 (아까 제가 드린 추가 스타일 포함됨)
 const styles = StyleSheet.create({
   container: { padding: 20, backgroundColor: '#f3f4f6' },
   sectionHeader: { marginBottom: 12, marginTop: 8 },
@@ -327,7 +403,6 @@ const styles = StyleSheet.create({
   },
   cardTitle: { fontSize: 16, fontWeight: 'bold', color: '#1f2937', marginBottom: 16 },
 
-  // 앱 설정 (반반)
   halfContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   halfItem: {
     width: '48%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
@@ -335,14 +410,25 @@ const styles = StyleSheet.create({
   },
   label: { fontSize: 15, color: '#374151', fontWeight: '500' },
 
-  // 방해금지
-  timePickerContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  dropdownBtn: {
-    backgroundColor: 'white', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12,
-    paddingHorizontal: 16, paddingVertical: 12, width: '45%', alignItems: 'center'
+  // 방해금지 및 공통 스타일 (민성님 코드 + 제 추가 코드)
+  settingItem: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20,
   },
-  dropdownText: { fontSize: 16, color: '#374151' },
-  tilde: { fontSize: 20, color: '#9ca3af' },
+  settingTextCol: { flex: 1, paddingRight: 16 },
+  settingLabel: { fontSize: 16, fontWeight: '600', color: '#374151', marginBottom: 4 },
+  settingDesc: { fontSize: 13, color: '#6b7280', lineHeight: 18 },
+  
+  dndTimeContainer: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    backgroundColor: '#f9fafb', padding: 16, borderRadius: 12, marginTop: -10, marginBottom: 20,
+    borderWidth: 1, borderColor: '#e5e7eb'
+  },
+  timeButton: {
+    backgroundColor: 'white', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8,
+    alignItems: 'center', borderWidth: 1, borderColor: '#d1d5db', width: '40%'
+  },
+  timeLabel: { fontSize: 12, color: '#6b7280', marginBottom: 2 },
+  timeValue: { fontSize: 18, fontWeight: 'bold', color: '#374151' },
 
   // 멤버 리스트 스타일
   premiumSectionContainer: { position: 'relative' },
@@ -361,7 +447,6 @@ const styles = StyleSheet.create({
   },
   miniBadgeText: { fontSize: 11, color: '#4b5563', fontWeight: '600' },
 
-  // 오버레이
   premiumOverlay: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 20,
     backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 20, justifyContent: 'center', alignItems: 'center',
@@ -371,20 +456,16 @@ const styles = StyleSheet.create({
   premiumBtn: { paddingHorizontal: 24, paddingVertical: 14, borderRadius: 12 },
   premiumBtnText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
 
-  // ================= 모달 스타일 =================
-  modalOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end',
-  },
+  // 모달
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   settingsModalContent: {
     backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    padding: 24, height: '70%', // 바텀 시트 느낌
+    padding: 24, height: '70%',
   },
   modalHeader: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24
   },
   modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#111827' },
-  
-  settingLabel: { fontSize: 16, fontWeight: 'bold', color: '#374151', marginBottom: 8, marginTop: 8 },
   guideText: { fontSize: 13, color: '#9ca3af', marginBottom: 16 },
 
   selectorBtn: {
@@ -393,17 +474,13 @@ const styles = StyleSheet.create({
   },
   selectorText: { fontSize: 16, color: '#374151' },
 
-  // 내부 드롭다운
-  dropdownList: {
-    backgroundColor: '#f9fafb', borderRadius: 12, marginTop: 8, padding: 8
-  },
+  dropdownList: { backgroundColor: '#f9fafb', borderRadius: 12, marginTop: 8, padding: 8 },
   dropdownItem: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingVertical: 12, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: '#e5e7eb'
   },
   dropdownItemText: { fontSize: 15, color: '#4b5563' },
 
-  // 스테퍼
   stepperContainer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 8, marginBottom: 24 },
   stepBtn: { backgroundColor: '#f3f4f6', padding: 12, borderRadius: 12 },
   cycleDisplay: { alignItems: 'center', minWidth: 140 },
