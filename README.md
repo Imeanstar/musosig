@@ -1,12 +1,12 @@
 # 🏥 무소식(無消息) - 1인 가구 안부 확인 앱
 
-> **Manager & Member** 역할 기반 안부 확인 시스템 (v2.0.1)
+> **Manager & Member** 역할 기반 안부 확인 시스템 (v2.2.1)
 
 ![React Native](https://img.shields.io/badge/React_Native-0.76.9-61DAFB?logo=react)
 ![Expo](https://img.shields.io/badge/Expo-~52.0-000020?logo=expo)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.3.3-3178C6?logo=typescript)
 ![Supabase](https://img.shields.io/badge/Supabase-Backend-3ECF8E?logo=supabase)
-![Version](https://img.shields.io/badge/Version-2.0.1-orange)
+![Version](https://img.shields.io/badge/Version-2.2.1-orange)
 
 ## 📋 목차
 - [개요](#-개요)
@@ -45,58 +45,78 @@
 
 ## ✨ 주요 기능
 
-### 1. **역할 기반 시스템** (v2.0 NEW) 🆕
-- ✅ **Manager (관리자)**: 소셜 로그인, 멤버 관리, 알림 수신
-- ✅ **Member (멤버)**: 6자리 코드로 페어링, 일일 체크인
-- ✅ 역할 선택 화면으로 첫 진입 시 선택
-- ✅ 1명의 Manager가 여러 Member 관리 가능
+### 1. **역할 기반 시스템** (v2.0) 🆕
+- ✅ **Manager**: 소셜 로그인, 멤버 관리, 알림 수신
+- ✅ **Member**: 6자리 코드로 페어링, 일일 체크인
 
 ### 2. **6자리 페어링 코드** 🔗
-- ✅ Manager가 "멤버 초대하기" 버튼으로 코드 생성
-- ✅ Member가 큰 숫자 키패드로 코드 입력
-- ✅ 자동 연결 및 관계 태그 설정 (예: 엄마, 아들)
-- ✅ 페어링 해제 및 재연결 기능
+- ✅ Manager가 초대 코드 생성 (10분 유효)
+- ✅ Member가 큰 숫자 키패드로 입력
+- ✅ 재연결 코드 발급 (기기 변경 시)
 
 ### 3. **Manager 대시보드** 📊
-- ✅ 관리 중인 모든 Member의 상태 한눈에 확인
-- ✅ 체크인 기록 캘린더 뷰
-- ✅ 멤버별 상세 정보 및 관계 태그 표시
-- ✅ 실시간 알림 수신 (24시간/48시간 미체크인)
+- ✅ 멤버 상태 실시간 모니터링
+- ✅ 월별 캘린더 뷰 (출석/결석 표시)
 
-### 4. **Member 체크인 화면**
-- ✅ 300x300px 대형 원형 버튼 (터치 친화적)
-- ✅ 하루 1회 출석 체크 (`check_in_logs` 테이블)
-- ✅ 오늘 출석 여부 자동 확인
-- ✅ **방어적 로직** 적용으로 신규 가입자 버그 수정
+### 4. **Member 체크인** 
+- ✅ 대형 원형 버튼 (시니어 친화적)
+- ✅ 하루 1회 안부 전송
 
 ### 5. **사용자 관리**
-- ✅ Manager: Supabase 소셜 로그인 (Google, Apple 등)
+- ✅ Manager: Google/Apple 소셜 로그인
 - ✅ Member: 전화번호 기반 간편 가입
-- ✅ 로컬 스토리지로 자동 로그인
-- ✅ 역할별 최적화된 인증 플로우
 
-### 6. **비상연락망 관리**
-- ✅ 최대 3명의 보호자 연락처 등록
-- ✅ 실시간 추가/삭제
-- ✅ Supabase + AsyncStorage 양방향 동기화
+### 6. **알림 시스템** 🔔
+- ✅ 24시간 미체크인 시 푸시 알림
+- ✅ 48시간 미체크인 시 긴급 SMS
 
 ### 7. **Premium 기능** 👑
-- ✅ 치매 예방 두뇌 훈련 (두 자리 수 덧셈)
-- ✅ 정답을 맞춰야 출석 완료
-- ✅ 설정에서 Premium 모드 테스트 가능
-
-### 8. **푸시 알림 시스템** 🔔
-- ✅ 로그인 시 자동 Expo Push Token 발급
-- ✅ Foreground에서도 알림 표시
-- ✅ 24시간 미접속 시 Manager에게 푸시 알림
-- ✅ Supabase Edge Function으로 자동 발송
-
-### 9. **법률 문서**
-- ✅ 이용약관 (Notion 페이지 WebView)
-- ✅ 개인정보처리방침 (Notion 페이지 WebView)
-- ✅ 설정 화면에서 언제든지 확인 가능
+- ✅ 치매 예방 두뇌 훈련
+- ✅ 구독 관리 (v2.2)
 
 ## 🔄 최근 주요 업데이트
+
+### 🎉 v2.2.1 (2026.01.30) - Code Quality & Architecture Improvement
+
+#### 1. **대규모 코드 리팩토링** 🏗️
+- **ManagerMain.tsx**: 805줄 → 314줄 (61% 감소)
+- **책임 분리**: 8가지 → 1가지 (라우팅만 담당)
+- **상태 관리**: 12개 → 4개 변수로 단순화
+
+#### 2. **Hooks 분리 및 재구성** 🪝
+- `useUserManagement` → 4개 Hook으로 분리
+  - `useAuth`: 인증 전담
+  - `useDeepLink`: OAuth 콜백 처리
+  - `useUserProfile`: 프로필 CRUD
+  - `useUserManagement`: Facade (하위 호환)
+- 신규 Hook 추가:
+  - `useMemberList`: 멤버 목록 관리
+  - `useInviteCode`: 초대 코드 생성
+  - `useCalendar`: 캘린더 데이터
+
+#### 3. **컴포넌트 모듈화** 🧩
+- `InviteCodeModal`: 초대 모달 분리 (238줄)
+- `ProfileTab`: 프로필/설정 탭 분리 (284줄)
+- `CalendarTab`: 캘린더 뷰 분리
+- 평균 파일 크기: 143줄 (관리 용이)
+
+#### 4. **아키텍처 패턴 적용** 📐
+- **Facade Pattern**: 기존 코드 호환성 유지
+- **Single Responsibility**: 파일당 1가지 책임
+- **Extract Component/Hook**: Martin Fowler 리팩토링 기법
+
+#### 5. **버그 수정 및 안정화** 🐛
+- DeepLink 과도한 로그 제거
+- Expo 개발 URL 필터링
+- OAuth 콜백 처리 개선
+
+#### 6. **개발자 경험 개선** 👨‍💻
+- 가독성 향상: 평균 파일 크기 82% 감소
+- 유지보수성: 모듈별 독립적 수정 가능
+- 테스트 용이성: Hook/컴포넌트 단독 테스트
+
+<details>
+<summary><strong>📜 v2.0.1 업데이트 히스토리 보기</strong></summary>
 
 ### 🚀 v2.0.1 (2026.01) - Major Refactoring
 
@@ -104,36 +124,21 @@
 - **Before**: 단일 사용자 → **After**: Manager & Member 역할 분리
 - **대상 확장**: 노인-보호자 → 모든 1인 가구 & 돌봄 관계
 - **데이터 모델**: `Profile`, `Manager`, `Member` 타입 정의
-- **마이그레이션**: 기존 `users` 테이블에 `role`, `pairing_code`, `manager_id`, `relation_tag`, `nickname` 필드 추가
 
 #### 2. **페어링 시스템 구축** 🔗
-- **6자리 숫자 코드**: `generate_pairing_code()` 함수로 중복 없이 생성
-- **Manager 플로우**: 소셜 로그인 → 대시보드 → 멤버 초대 코드 생성
-- **Member 플로우**: 간편 가입 → 코드 입력 → 자동 연결
-- **관계 태그**: 엄마, 아들, 딸, 친구 등 자유롭게 설정
+- 6자리 숫자 코드로 간편 연결
+- Manager/Member 플로우 최적화
 
 #### 3. **RLS 정책 재설계** 🔒
-- **조회 권한**: 본인 + 내가 관리하는 멤버
-- **수정 권한**: 본인 프로필만 (멤버가 `manager_id` 업데이트 가능)
-- **생성 권한**: 로그인한 사용자는 자기 프로필 생성 가능
-- **제약 조건**: `role` 오타 방지 (`manager`, `member`만 허용)
+- 조회: 본인 + 내가 관리하는 멤버
+- 수정: 본인 프로필만
+- `role` 제약 조건 추가
 
 #### 4. **UI/UX 전면 개편** 🎨
-- `RoleSelection.tsx`: 첫 진입 시 역할 선택 화면
-- `MemberPairing.tsx`: 큰 숫자 키패드 UI (시니어 친화적)
-- `MemberMain.tsx`: Member 전용 체크인 화면
-- `ManagerMain.tsx`: Manager 대시보드 (탭 네비게이션)
+- 역할별 최적화된 인터페이스
+- 시니어 친화적 디자인
 
-#### 5. **타입 시스템 강화** 📘
-- `Profile` 인터페이스: 공통 필드 정의
-- `Manager`, `Member`: 역할별 확장 타입
-- `isManager()`, `isMember()`: 타입 가드 함수
-- `UserInfo`: 하위 호환성을 위한 타입 별칭
-
-#### 6. **스토리지 최적화** 💾
-- `AsyncStorage.multiSet` / `multiGet`으로 일괄 처리
-- 새 필드 지원: `role`, `pairing_code`, `manager_id`, `nickname`
-- 성능 개선 및 I/O 최소화
+</details>
 
 <details>
 <summary><strong>📜 v1.1 업데이트 히스토리 보기</strong></summary>
@@ -142,27 +147,24 @@
 
 #### 1. **Supabase Auth 연동** ⭐
 - 전화번호 기반 자동 인증 시스템 구축
-- RLS (Row Level Security) 정책 활성화로 데이터 보안 강화
-- `signInWithPassword` / `signUp` 자동 처리
+- RLS 정책 활성화
 
 #### 2. **출석 로직 방어적 개선** 🛡️
-- **문제**: 신규 가입자도 "완료" 버튼으로 표시되는 버그
-- **해결**: `last_seen_at` null 체크 + Early Return 패턴
-- **결과**: 5가지 방어 로직으로 모든 예외 상황 명시적 처리
+- 신규 가입자 버그 수정
+- 5가지 방어 로직 적용
 
 #### 3. **DB 구조 단순화**
-- `check_ins` 테이블 제거 → `users.last_seen_at` 필드로 통합
-- 쿼리 성능 개선 및 데이터 정합성 향상
-
-#### 4. **24시간 알림 정밀화**
-- 5분 주기로 6분 윈도우 체크 (중복 발송 방지)
-- 48시간 미접속자에게 보호자 SMS 발송 (CoolSMS)
+- `check_ins` 테이블 제거
+- 쿼리 성능 개선
 
 </details>
 
 ---
 
 # 📸 Version Log
+
+## Ver 2.2.1 (2026.01.30) - Code Quality Improvement
+> 대규모 리팩토링으로 코드 품질 향상 (61% 코드 감소)
 
 ## Ver 2.0.1 (2026.01) - Manager & Member 시스템
 > 역할 기반 아키텍처로 전면 개편
@@ -262,61 +264,69 @@
 - **Version Control**: Git + GitHub
 - **Migration**: SQL 스크립트 기반 DB 버전 관리
 
-## 📁 프로젝트 구조
+## 📁 프로젝트 구조 (v2.2)
 
 ```
 musosik/
-├── app/                        # Expo Router 화면
-│   ├── index.tsx              # 메인 라우팅 (역할 선택 → Manager/Member)
-│   └── _layout.tsx            # 전역 레이아웃 설정
+├── app/                          # Expo Router 화면
+│   ├── index.tsx                # 메인 라우팅
+│   ├── auth/
+│   │   ├── callback.tsx         # OAuth 콜백
+│   │   └── certification.tsx    # 본인인증 (준비 중)
+│   └── _layout.tsx              # 전역 레이아웃
 │
-├── components/                 # 재사용 컴포넌트
-│   ├── RoleSelection.tsx      # [NEW] 역할 선택 화면 (Manager/Member)
-│   ├── MemberPairing.tsx      # [NEW] Member 6자리 코드 입력 화면
-│   ├── MemberMain.tsx         # [NEW] Member 체크인 메인 화면
-│   ├── ManagerMain.tsx        # [NEW] Manager 대시보드 (멤버 목록/캘린더)
-│   ├── LegalModal.tsx         # 법률 문서 WebView
+├── components/                   # 재사용 컴포넌트
+│   ├── ManagerMain.tsx          # [REFACTORED] Manager 대시보드 (314줄)
+│   ├── MemberMain.tsx           # Member 체크인 화면
+│   ├── MemberPairing.tsx        # Member 코드 입력 화면
+│   ├── RoleSelection.tsx        # 역할 선택 화면
+│   ├── AuthManager.tsx          # 이메일 인증 화면
+│   ├── manager/                 # [NEW] Manager 전용 컴포넌트
+│   │   ├── InviteCodeModal.tsx  # 초대 코드 모달
+│   │   ├── ProfileTab.tsx       # 프로필/설정 탭
+│   │   └── CalendarTab.tsx      # 캘린더 탭
 │   └── modals/
-│       ├── RegisterModal.tsx  # 회원가입 모달
-│       ├── MathChallengeModal.tsx  # 수학 문제 모달 (Premium)
-│       └── SettingsModal.tsx  # 설정 모달
+│       ├── SubscriptionModal.tsx # 구독 관리
+│       └── SettingsModal.tsx    # 설정 모달
 │
-├── hooks/                      # 커스텀 훅
-│   ├── useUserManagement.ts   # [UPDATED] 사용자 관리 (Manager/Member 지원)
-│   └── useCheckIn.ts          # 출석 체크 로직
+├── hooks/                        # 커스텀 훅 (모듈화)
+│   ├── useUserManagement.ts     # [REFACTORED] Facade Pattern
+│   ├── useAuth.ts               # [NEW] 인증 전담
+│   ├── useDeepLink.ts           # [NEW] OAuth 콜백
+│   ├── useUserProfile.ts        # [NEW] 프로필 CRUD
+│   ├── useMemberList.ts         # [NEW] 멤버 목록 관리
+│   ├── useInviteCode.ts         # [NEW] 초대 코드 생성
+│   ├── useCalendar.ts           # [NEW] 캘린더 데이터
+│   ├── useCheckIn.ts            # 출석 체크
+│   └── usePremium.ts            # 프리미엄 기능
 │
-├── utils/                      # 유틸리티 함수
-│   ├── storage.ts             # [UPDATED] AsyncStorage (role, pairing_code 등)
-│   ├── date.ts                # 날짜 관련 함수
-│   └── notificationHelper.ts  # 푸시 알림 핵심 로직
+├── utils/                        # 유틸리티 함수
+│   ├── storage.ts               # AsyncStorage 관리
+│   ├── date.ts                  # 날짜 관련
+│   └── notificationHelper.ts    # 푸시 알림
 │
-├── types/                      # TypeScript 타입 정의
-│   └── index.ts               # [UPDATED] Profile, Manager, Member, CheckInLog
+├── types/                        # TypeScript 타입
+│   └── index.ts                 # Profile, Manager, Member
 │
-├── constants/                  # 상수
-│   └── index.ts               # [UPDATED] 새 스토리지 키 (USER_ROLE, PAIRING_CODE 등)
+├── constants/                    # 상수
+│   └── index.ts                 # 스토리지 키, 메시지
 │
-├── styles/                     # 스타일 정의
-│   └── styles.ts              # 전역 스타일
+├── lib/                          # 외부 라이브러리
+│   └── supabase.ts              # Supabase 클라이언트
 │
-├── lib/                        # 외부 라이브러리 설정
-│   └── supabase.ts            # Supabase 클라이언트
-│
-└── supabase/                   # Supabase 설정
+└── supabase/                     # Supabase 설정
     ├── migrations/
-    │   └── 20260120_v1.1_profiles_migration.sql  # [NEW] v2.0 DB 마이그레이션
+    │   └── 20260120_v2.0_schema.sql
     └── functions/
-        ├── check-24h-push/        # 24시간 푸시 알림 (5분마다)
-        │   └── index.ts
-        └── emergency-48h/         # 48시간 긴급 SMS (매일 9시)
-            └── index.ts
+        ├── check-24h-push/      # 24시간 푸시 알림
+        └── emergency-48h/       # 48시간 긴급 SMS
 ```
 
-### 주요 변경 사항
-- ✅ **4개 신규 컴포넌트**: `RoleSelection`, `MemberPairing`, `MemberMain`, `ManagerMain`
-- ✅ **타입 시스템 재설계**: `Profile`, `Manager`, `Member` 추가
-- ✅ **스토리지 확장**: 역할 관련 키 추가 (`role`, `pairing_code`, `manager_id`, `nickname`)
-- ✅ **마이그레이션 스크립트**: Supabase 테이블 구조 변경 SQL
+### v2.2 주요 변경 사항
+- ✅ **Hooks 모듈화**: 1개 → 7개 (책임 분리)
+- ✅ **컴포넌트 세분화**: manager/ 폴더 신규
+- ✅ **평균 파일 크기**: 143줄 (관리 용이)
+- ✅ **아키텍처**: Facade Pattern, SRP 적용
 
 ## 🚀 시작하기
 
@@ -736,23 +746,24 @@ eas submit --platform ios
 - [x] Manager 대시보드 (`ManagerMain.tsx`)
 - [x] 스토리지 로직 리팩토링
 
-### 🚧 진행 중 (Phase 3-4)
+### 🚧 진행 중 (Phase 3)
+- [x] 대규모 코드 리팩토링 (v2.2.1 완료)
+- [x] Hooks 모듈화 (v2.2.1 완료)
+- [x] 컴포넌트 세분화 (v2.2.1 완료)
 - [ ] Manager 소셜 로그인 통합 (Google, Apple)
-- [ ] 체크인 기록 캘린더 뷰 완성
-- [ ] 멤버 초대 코드 재생성 로직
-- [ ] 페어링 해제 및 재연결 기능
 
-### 📅 예정 (Phase 5)
-- [ ] Edge Function 업데이트 (Manager에게 알림 발송)
-- [ ] 48시간 SMS 알림 개선
-- [ ] 알림 템플릿 다국어 지원
-- [ ] 앱 성능 최적화 (메모리, 배터리)
+### 📅 예정 (Phase 4-5)
+- [ ] 본인인증 시스템 (포트원 API)
+- [ ] 멤버 관리 기능 (삭제/수정)
+- [ ] 통계 대시보드 (출석률 그래프)
+- [ ] 알림 설정 화면
+- [ ] 앱 성능 최적화
 
 ## ⚠️ 알려진 이슈
 
-- **Manager 소셜 로그인**: 현재 전화번호 인증으로 임시 구현됨 (OAuth 통합 예정)
-- **캘린더 뷰**: 데이터 로드 시 로딩 인디케이터 필요
-- **페어링 코드**: 만료 시간 없음 (보안 개선 예정)
+- **소셜 로그인**: OAuth 콜백 처리 개선 필요 (v2.2.1에서 일부 개선)
+- **본인인증**: 포트원 API 통합 대기 중
+- **알림 설정**: UI 준비 중 (v2.3 예정)
 
 ## 🤝 기여
 
@@ -795,5 +806,5 @@ v2.0에서는 더 많은 사람들이 서로를 돌볼 수 있도록
 ---
 
 **Project Repository**: https://github.com/Imeanstar/musosig  
-**Version**: 2.0.1 (2026.01)  
+**Version**: 2.2.1 (2026.01.30)  
 **License**: MIT
