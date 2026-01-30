@@ -1,55 +1,58 @@
-/**
- * useCalendar.ts
- * 
- * 멤버 체크인 캘린더 Hook
- * - 월별 체크인 로그 조회
- * - 월 이동
- * - 날짜 계산
- * 
- * @extracted from ManagerMain.tsx (185-223줄)
- */
-
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { CheckInLog } from '../types'; 
 
+// 🔥 [수정 1] 반환 타입 정의를 Set -> Map으로 변경
 interface UseCalendarReturn {
   currentDate: Date;
-  checkInLogs: Set<string>;
+  checkInLogs: Map<string, CheckInLog>; 
   isLoading: boolean;
   changeMonth: (delta: number) => void;
   getDaysInMonth: (date: Date) => { daysInMonth: number; startingDayOfWeek: number };
 }
 
-export const useCalendar = (memberId: string | undefined): UseCalendarReturn => {
+export const useCalendar = (
+  memberId: string | undefined, 
+  isPremium: boolean = false 
+): UseCalendarReturn => {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [checkInLogs, setCheckInLogs] = useState<Set<string>>(new Set());
+
+  // 🔥 [수정 2] 상태(State)의 제네릭 타입도 Set -> Map으로 변경
+  const [checkInLogs, setCheckInLogs] = useState<Map<string, CheckInLog>>(new Map());
+  
   const [isLoading, setIsLoading] = useState(false);
 
-  /**
-   * 체크인 로그 조회
-   */
   const fetchCheckInLogs = async () => {
     if (!memberId) return;
 
     setIsLoading(true);
     try {
-      const year = currentDate.getFullYear();
-      const month = currentDate.getMonth() + 1;
-      const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
-      const endDate = `${year}-${String(month).padStart(2, '0')}-31`;
+      // 1. 조회 기간 설정 (프리미엄 6개월, 일반 2개월)
+      const monthsToLookBack = isPremium ? 6 : 2;
+      
+      const limitDate = new Date();
+      limitDate.setMonth(limitDate.getMonth() - monthsToLookBack);
+      limitDate.setDate(1); 
 
-      const { data } = await supabase
+      // 2. Supabase 쿼리
+      const { data, error } = await supabase
         .from('check_in_logs')
-        .select('created_at')
+        .select('id, member_id, created_at, check_in_type, proof_url')
         .eq('member_id', memberId)
-        .gte('created_at', startDate)
-        .lte('created_at', endDate);
+        .gte('created_at', limitDate.toISOString());
+
+      if (error) throw error;
 
       if (data) {
-        const logSet = new Set<string>();
-        data.forEach(log => logSet.add(log.created_at.split('T')[0]));
-        setCheckInLogs(logSet);
-        console.log('[Calendar] 로그 조회 완료:', logSet.size, '일');
+        // 3. Map으로 변환
+        const logMap = new Map<string, CheckInLog>();
+        data.forEach(log => {
+          const dateKey = log.created_at.split('T')[0]; // YYYY-MM-DD
+          logMap.set(dateKey, log); 
+        });
+        
+        setCheckInLogs(logMap);
+        console.log(`[Calendar] ${isPremium ? '프리미엄' : '일반'} 로그 조회 완료:`, logMap.size, '건');
       }
     } catch (e) {
       console.error('[Calendar] 로그 조회 실패:', e);
@@ -58,18 +61,12 @@ export const useCalendar = (memberId: string | undefined): UseCalendarReturn => 
     }
   };
 
-  /**
-   * 월 변경
-   */
   const changeMonth = (delta: number) => {
     const newDate = new Date(currentDate);
     newDate.setMonth(newDate.getMonth() + delta);
     setCurrentDate(newDate);
   };
 
-  /**
-   * 월 정보 계산 (일수, 시작 요일)
-   */
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();
     const month = date.getMonth();
@@ -79,10 +76,9 @@ export const useCalendar = (memberId: string | undefined): UseCalendarReturn => 
     };
   };
 
-  // memberId나 currentDate 변경 시 자동 조회
   useEffect(() => {
     fetchCheckInLogs();
-  }, [memberId, currentDate]);
+  }, [memberId, currentDate, isPremium]);
 
   return {
     currentDate,

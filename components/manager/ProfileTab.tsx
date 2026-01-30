@@ -172,7 +172,7 @@ export function ProfileTab({
         />
       </View>
 
-      <Text style={styles.versionText}>앱 버전 v1.0.0</Text>
+      <Text style={styles.versionText}>앱 버전 v2.2.0</Text>
       <View style={{ height: 40 }} />
       
     </ScrollView>

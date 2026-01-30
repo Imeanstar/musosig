@@ -10,11 +10,15 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, RefreshControl, Alert, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, 
+  ScrollView, RefreshControl, Alert, Dimensions, Image, Modal } from 'react-native';
+import { X, CheckCircle, XCircle } from 'lucide-react-native'; // 아이콘 추가
 import { LinearGradient } from 'expo-linear-gradient';
-import { ChevronLeft, ChevronRight, Plus, Settings, User, Crown, RefreshCw } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, Plus, Settings, 
+  User, Crown, RefreshCw, Camera } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
+import * as Clipboard from 'expo-clipboard';
 
 // Hooks
 import { useUserManagement } from '../hooks/useUserManagement';
@@ -27,6 +31,7 @@ import { InviteCodeModal } from './manager/InviteCodeModal';
 import { ProfileTab } from './manager/ProfileTab';
 import { SettingsTab } from './manager/SettingsTab';
 import { SubscriptionModal } from './modals/SubscriptionModal';
+
 
 // Types
 import { UserInfo, Member, UserSettings } from '../types';
@@ -55,8 +60,14 @@ export function ManagerMain({ onBack, userInfo }: ManagerMainProps) {
   // 커스텀 Hooks (비즈니스 로직 분리)
   const { members, refreshing, fetchMembers, onRefresh } = useMemberList(userInfo?.id);
   const { isCodeLoading, generateInviteCode, generateRelinkCode } = useInviteCode();
-  const { currentDate, checkInLogs, changeMonth, getDaysInMonth } = useCalendar(selectedMember?.id);
+  const { currentDate, checkInLogs, changeMonth, getDaysInMonth } = useCalendar(
+    selectedMember?.id, 
+    userInfo.is_premium ?? false
+  );
 
+  const [detailModalVisible, setDetailModalVisible] = useState(false);
+  const [selectedDateLog, setSelectedDateLog] = useState<{ date: string, log: any | null } | null>(null);
+  const [showPhoto, setShowPhoto] = useState(false);
 
   const [currentUser, setCurrentUser] = useState<UserInfo>(userInfo);
   
@@ -74,10 +85,78 @@ export function ManagerMain({ onBack, userInfo }: ManagerMainProps) {
   // 재연결 코드 생성 핸들러
   const handleGenerateRelinkCode = async () => {
     if (!selectedMember) return;
+    
+    // 1. 코드 생성 요청
     const code = await generateRelinkCode(selectedMember.id);
+    
     if (code) {
-      Alert.alert('재연결 코드 발급', `코드: ${code}\n\n멤버에게 이 코드를 전달해주세요.`);
+      // 2. 📋 클립보드에 자동 복사 (핵심!)
+      await Clipboard.setStringAsync(code);
+
+      // 3. 안내 메시지
+      Alert.alert(
+        '재연결 코드 발급', 
+        `코드: ${code}\n\n✅ 클립보드에 복사되었습니다!`,
+        [{ text: '확인' }]
+      );
     }
+  };
+
+  // 🗑️ 멤버 삭제 핸들러
+  const handleDeleteMember = () => {
+    if (!selectedMember) return;
+
+    Alert.alert(
+      "정말 삭제하시겠습니까? 🚨",
+      `'${selectedMember.name}'님을 멤버에서 삭제합니다.\n\n모든 출석 기록과 연결된 데이터가 영구적으로 삭제되며, 복구할 수 없습니다.`,
+      [
+        { text: "취소", style: "cancel" },
+        { 
+          text: "삭제하기", 
+          style: "destructive", // 빨간색 버튼 (iOS)
+          onPress: async () => {
+            try {
+              // 1. 출석 기록(Logs) 먼저 싹 지우기
+              const { error: logError } = await supabase
+                .from('check_in_logs')
+                .delete()
+                .eq('member_id', selectedMember.id);
+              
+              if (logError) throw logError;
+
+              // 2. 유저(Member) 정보 삭제하기
+              const { error: userError } = await supabase
+                .from('users')
+                .delete()
+                .eq('id', selectedMember.id);
+
+              if (userError) throw userError;
+
+              // 3. 성공 처리
+              Alert.alert("삭제 완료", "멤버 삭제가 완료되었습니다.");
+              setSelectedMember(null); // 상세 화면 닫기
+              fetchMembers(); // 목록 새로고침
+
+            } catch (e) {
+              console.error("삭제 실패:", e);
+              Alert.alert("오류", "멤버를 삭제하지 못했습니다.\n잠시 후 다시 시도해주세요.");
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  // 🔥 날짜 클릭 핸들러 수정
+  const handleDayPress = (day: number, dateKey: string) => {
+    const log = checkInLogs.get(dateKey);
+    const todayKey = new Date().toISOString().split('T')[0];
+    
+    if (dateKey > todayKey) return; // 미래 날짜 방지
+
+    setShowPhoto(false); // 🔥 [NEW] 모달 열 때 사진은 일단 숨김!
+    setSelectedDateLog({ date: `${currentDate.getMonth() + 1}월 ${day}일`, log: log || null });
+    setDetailModalVisible(true);
   };
 
   const refreshUserData = async () => {
@@ -245,34 +324,42 @@ export function ManagerMain({ onBack, userInfo }: ManagerMainProps) {
                 {Array.from({ length: getDaysInMonth(currentDate).startingDayOfWeek }).map((_, i) => (
                   <View key={`empty-${i}`} style={styles.dayCell} />
                 ))}
+                {/* 날짜 렌더링 */}
                 {Array.from({ length: getDaysInMonth(currentDate).daysInMonth }).map((_, i) => {
-                  const day = i + 1;
-                  const dateKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                  const now = new Date();
-                  const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-                  const isChecked = checkInLogs.has(dateKey);
-                  const isFuture = dateKey > todayKey;
-                  const isMissed = !isChecked && !isFuture;
+                   const day = i + 1;
+                   const dateKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                   
+                   const now = new Date();
+                   const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+                   
+                   // 🔥 Map에서 확인 (has -> get)
+                   const logData = checkInLogs.get(dateKey);
+                   const isChecked = !!logData;
+                   const isFuture = dateKey > todayKey;
+                   const isMissed = !isChecked && !isFuture;
 
-                  return (
-                    <View 
-                      key={day} 
-                      style={[
-                        styles.dayCell, 
-                        isChecked && styles.checkedDay,
-                        isMissed && styles.missedDay
-                      ]}
-                    >
-                      <Text style={[
-                        styles.dayText, 
-                        isChecked && styles.checkedDayText,
-                        isMissed && styles.missedDayText
-                      ]}>
-                        {day}
-                      </Text>
-                    </View>
-                  );
-                })}
+                   return (
+                     <TouchableOpacity 
+                       key={day} 
+                       style={[
+                         styles.dayCell, 
+                         isChecked && styles.checkedDay,
+                         isMissed && styles.missedDay
+                       ]}
+                       // 🔥 클릭 이벤트 연결
+                       onPress={() => handleDayPress(day, dateKey)}
+                       disabled={isFuture} // 미래 날짜는 클릭 불가
+                     >
+                       <Text style={[
+                         styles.dayText, 
+                         isChecked && styles.checkedDayText,
+                         isMissed && styles.missedDayText
+                       ]}>
+                         {day}
+                       </Text>
+                     </TouchableOpacity>
+                   );
+                 })}
               </View>
             </View>
 
@@ -288,6 +375,18 @@ export function ManagerMain({ onBack, userInfo }: ManagerMainProps) {
                 <Text style={styles.relinkButtonText}>재연결 코드 발급</Text>
               </TouchableOpacity>
             </View>
+
+            {/* 🔥 [NEW] 멤버 삭제 카드 */}
+            <View style={styles.deleteCard}>
+              <Text style={styles.deleteTitle}>멤버 삭제</Text>
+              <Text style={styles.deleteDesc}>
+                더 이상 이 멤버를 관리하지 않거나, 잘못 등록된 경우 멤버를 삭제할 수 있습니다.
+              </Text>
+              <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteMember}>
+                <Text style={styles.deleteButtonText}>멤버 삭제하기</Text>
+              </TouchableOpacity>
+            </View>
+
           </ScrollView>
         )}
 
@@ -330,6 +429,81 @@ export function ManagerMain({ onBack, userInfo }: ManagerMainProps) {
       </View>
 
       {/* 모달들 */}
+
+      {/* 날짜 상세 모달 */}
+      <Modal
+        visible={detailModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDetailModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.detailCard}>
+            
+            {/* 닫기 버튼 */}
+            <TouchableOpacity style={styles.closeIcon} onPress={() => setDetailModalVisible(false)}>
+              <X size={24} color="#6b7280" />
+            </TouchableOpacity>
+
+            <Text style={styles.detailDateTitle}>{selectedDateLog?.date} 기록</Text>
+
+            {selectedDateLog?.log ? (
+              // ✅ 출석한 날
+              <View style={styles.detailContent}>
+                <CheckCircle size={48} color="#10b981" style={{ marginBottom: 12 }} />
+                <Text style={styles.detailTitleGreen}>출석 완료!</Text>
+                
+                <Text style={styles.detailDesc}>
+                  "{selectedDateLog.log.check_in_type || '터치'}"(으)로{'\n'}출석한 날입니다.
+                </Text>
+
+                {/* 🔥 [여기!] 사진 로직 변경 */}
+                {selectedDateLog.log.proof_url && (
+                  <View style={{ width: '100%', alignItems: 'center', marginTop: 16 }}>
+                    
+                    {!showPhoto ? (
+                      // 1. 버튼: 아직 안 눌렀을 때
+                      <TouchableOpacity 
+                        style={styles.showPhotoBtn} 
+                        onPress={() => setShowPhoto(true)}
+                      >
+                        <Camera size={20} color="#4b5563" style={{ marginRight: 8 }} />
+                        <Text style={styles.showPhotoBtnText}>인증 사진 확인하기</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      // 2. 이미지: 버튼 눌렀을 때
+                      <View style={styles.photoContainer}>
+                        <Image 
+                          source={{ uri: selectedDateLog.log.proof_url }} 
+                          style={styles.proofPhoto}
+                          resizeMode="cover"
+                        />
+                      </View>
+                    )}
+
+                  </View>
+                )}
+              </View>
+            ) : (
+              // ❌ 결석한 날 (그대로 유지)
+              <View style={styles.detailContent}>
+                <XCircle size={48} color="#ef4444" style={{ marginBottom: 12 }} />
+                <Text style={styles.detailTitleRed}>미출석</Text>
+                <Text style={styles.detailDesc}>출석하지 않은 날입니다.</Text>
+                <Text style={styles.detailSubDesc}>전화로 안부를 물어보세요.</Text>
+              </View>
+            )}
+
+            <TouchableOpacity 
+              style={styles.confirmButton} 
+              onPress={() => setDetailModalVisible(false)}
+            >
+              <Text style={styles.confirmButtonText}>닫기</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       <InviteCodeModal 
         visible={showInviteModal}
         onClose={() => setShowInviteModal(false)}
@@ -394,4 +568,58 @@ const styles = StyleSheet.create({
   tabItem: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   tabText: { fontSize: 12, color: '#9ca3af', marginTop: 4 },
   activeTabText: { color: '#3b82f6', fontWeight: 'bold' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  detailCard: { width: '85%', backgroundColor: 'white', borderRadius: 20, padding: 24, alignItems: 'center', elevation: 5 },
+  closeIcon: { position: 'absolute', top: 16, right: 16, padding: 4 },
+  detailDateTitle: { fontSize: 18, fontWeight: 'bold', color: '#374151', marginBottom: 20 },
+  detailContent: { alignItems: 'center', width: '100%' },
+  detailTitleGreen: { fontSize: 22, fontWeight: 'bold', color: '#10b981', marginBottom: 8 },
+  detailTitleRed: { fontSize: 22, fontWeight: 'bold', color: '#ef4444', marginBottom: 8 },
+  detailDesc: { fontSize: 16, color: '#4b5563', textAlign: 'center', lineHeight: 24 },
+  detailSubDesc: { fontSize: 14, color: '#9ca3af', marginTop: 4 },
+  photoContainer: { marginTop: 16, width: '100%', alignItems: 'center' },
+  photoLabel: { fontSize: 14, fontWeight: 'bold', color: '#4b5563', marginBottom: 8, alignSelf: 'flex-start' },
+  proofPhoto: { width: '100%', height: 200, borderRadius: 12, backgroundColor: '#f3f4f6' },
+  confirmButton: { marginTop: 24, backgroundColor: '#3b82f6', width: '100%', paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
+  confirmButtonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
+  showPhotoBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#f3f4f6', paddingVertical: 12, paddingHorizontal: 20,
+    borderRadius: 12, width: '100%', borderWidth: 1, borderColor: '#e5e7eb'
+  },
+  showPhotoBtnText: { fontSize: 16, fontWeight: '600', color: '#374151' },
+  // 멤버 삭제 카드 스타일
+  deleteCard: { 
+    marginTop: 20, 
+    backgroundColor: '#fff', 
+    padding: 20, 
+    borderRadius: 16, 
+    elevation: 3, 
+    borderWidth: 1, 
+    borderColor: '#fee2e2' // 연한 빨간 테두리
+  },
+  deleteTitle: { 
+    fontSize: 18, 
+    fontWeight: 'bold', 
+    color: '#ef4444', // 빨간색 제목
+    marginBottom: 8 
+  },
+  deleteDesc: { 
+    fontSize: 14, 
+    color: '#6b7280', 
+    marginBottom: 16, 
+    lineHeight: 20 
+  },
+  deleteButton: { 
+    backgroundColor: '#fee2e2', // 연한 빨간 배경
+    paddingVertical: 14, 
+    borderRadius: 12, 
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#fca5a5'
+  },
+  deleteButtonText: { 
+    color: '#dc2626', // 진한 빨간 글씨
+    fontWeight: 'bold', 
+    fontSize: 16},
 });

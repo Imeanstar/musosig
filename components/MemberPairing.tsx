@@ -54,26 +54,18 @@ export function MemberPairing({ onPairingComplete, onBack }: MemberPairingProps)
 
     setIsLoading(true);
     try {
-      // 1. 투명 계정 생성
+      // 1. 현재 로그인된 유저 ID 가져오기 (없으면 익명 로그인)
       let currentUserId = userInfo?.id;
       if (!currentUserId) {
-        const { data: sessionData } = await supabase.auth.getSession();
-        if (sessionData.session?.user) {
-          currentUserId = sessionData.session.user.id;
-        } else {
-          const randomEmail = `elder_${Date.now()}_${Math.floor(Math.random()*1000)}@musosik.app`;
-          const randomPassword = `pass_${Date.now()}_${Math.floor(Math.random()*1000)}`;
-          const { data: authData, error: authError } = await supabase.auth.signUp({ email: randomEmail, password: randomPassword });
-          if (authError) throw authError;
-          if (!authData.user) throw new Error('계정 생성 실패');
-          currentUserId = authData.user.id;
-        }
+        const { data: authData, error: authError } = await supabase.auth.signInAnonymously();
+        if (authError || !authData.user) throw new Error('로그인 실패');
+        currentUserId = authData.user.id;
       }
 
-      // 2. 대상 찾기
+      // 2. 코드 주인(대상) 찾기
       const { data: targetUser, error: searchError } = await supabase
         .from('users')
-        .select('id, role, name, nickname, manager_id, pairing_code_expires_at, pending_member_nickname, pending_member_relation, relation_tag')
+        .select('*') // 모든 정보 다 가져옴
         .eq('pairing_code', fullCode)
         .maybeSingle();
 
@@ -83,64 +75,43 @@ export function MemberPairing({ onPairingComplete, onBack }: MemberPairingProps)
         return;
       }
 
-      if (targetUser.pairing_code_expires_at && new Date() > new Date(targetUser.pairing_code_expires_at)) {
-         Alert.alert('만료됨', '시간이 초과된 코드입니다.');
-         setIsLoading(false);
-         return;
-      }
+      // 3. 상황별 분기 처리
 
-      // 3. 연결 로직
-      // Case 1: 매니저 (신규)
+      // [Case A] 매니저와 처음 연결하는 경우 (targetUser가 매니저임)
       if (targetUser.role === 'manager') {
-        const { error: updateError } = await supabase.from('users').upsert({ 
-            id: currentUserId,
+        const { error: updateError } = await supabase.from('users').update({ 
             role: 'member',
             manager_id: targetUser.id,
-            name: targetUser.pending_member_nickname || '어르신', 
-            relation_tag: targetUser.pending_member_relation || '가족',
-            nickname: targetUser.pending_member_nickname || '어르신',
             updated_at: new Date()
-        });
+        }).eq('id', currentUserId); // 내 정보를 업데이트
+
         if (updateError) throw updateError;
-        Alert.alert('연결 성공!', `${targetUser.name}님과 연결되었습니다.`, [
-          { text: '확인', onPress: () => onPairingComplete(targetUser.name) }
-        ]);
+        
+        // 🚀 전화번호가 없으면 입력 페이지로 가야 함 (여기선 일단 성공 처리하고, Main에서 체크 추천)
+        onPairingComplete(targetUser.name);
       } 
-      // Case 2: 기존 멤버 (재연결)
+      
+      // [Case B] 기존 멤버 계정을 복구하는 경우 (targetUser가 멤버임)
       else if (targetUser.role === 'member') {
+        
+        // 🔥 여기가 핵심! SQL 함수 호출 (중복 에러 없이 영혼 체인지)
         const { error: rpcError } = await supabase.rpc('migrate_member_history', {
-          old_member_id: targetUser.id,
-          new_member_id: currentUserId
+          old_member_id: targetUser.id,  // 코드 주인의 ID (뺏길 놈)
+          new_member_id: currentUserId   // 지금 내 ID (뺏을 놈)
         });
+
         if (rpcError) throw rpcError;
 
-        const officialName = targetUser.name ? String(targetUser.name) : '';
-        const nickname = targetUser.nickname ? String(targetUser.nickname) : '';
-        const pendingName = targetUser.pending_member_nickname ? String(targetUser.pending_member_nickname) : '';
-        
-        const restoredName = 
-          (officialName.trim() !== '') ? officialName :
-          (nickname.trim() !== '') ? nickname :
-          (pendingName.trim() !== '') ? pendingName : '어르신';
-
-        const { error: updateError } = await supabase.from('users').upsert({
-             id: currentUserId,
-             role: 'member',
-             manager_id: targetUser.manager_id,
-             name: restoredName,
-             nickname: restoredName,
-             relation_tag: targetUser.pending_member_relation || targetUser.relation_tag || '가족',
-             updated_at: new Date()
-          });
-
-        if (updateError) throw updateError;
-        Alert.alert('재연결 성공', `"${restoredName}"님의 기록을 불러왔습니다!`, [
-          { text: '확인', onPress: () => onPairingComplete('보호자') }
+        // 성공! (전화번호도 같이 넘어왔으므로 입력창 갈 필요 없음)
+        Alert.alert('재연결 성공', `"${targetUser.name}"님의 기록을 모두 불러왔습니다!`, [
+          { text: '시작하기', onPress: () => onPairingComplete('보호자') }
         ]);
       }
+
     } catch (e: any) {
-      console.error(e);
-      Alert.alert('오류', '연결 중 문제가 발생했습니다.');
+      console.error("Pairing Error:", e);
+      Alert.alert('오류', '연결 중 문제가 발생했습니다. 다시 시도해주세요.');
+    } finally {
       setIsLoading(false);
     }
   };

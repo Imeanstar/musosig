@@ -93,6 +93,8 @@ export interface CheckInLog {
   id: number;
   member_id: string;
   created_at: string;
+  check_in_type?: string; // 🔥 [NEW] 출석 방식 (수학, 사진, 클릭 등)
+  proof_url?: string;     // 🔥 [NEW] 인증 사진 URL
 }
 
 /**
