@@ -13,6 +13,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Heart, Calculator, Camera, Smartphone, CheckCircle, RefreshCw, LogOut, X, RotateCcw, Send } from 'lucide-react-native';
 import { supabase } from '../lib/supabase';
 import { UserInfo } from '../types';
+import { Settings } from 'lucide-react-native';
+import { MemberSettingsModal } from './modals/MemberSettingsModal';
 
 // 📦 하드웨어 라이브러리
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -21,6 +23,7 @@ import { Accelerometer } from 'expo-sensors';
 // 상단 import 목록에 추가
 import { decode } from 'base64-arraybuffer';
 import * as FileSystem from 'expo-file-system'; // Expo 기본 내장 모듈
+import { FakeCallModal } from './modals/FakeCallModal';
 
 interface MemberMainProps {
   userInfo: UserInfo;
@@ -34,6 +37,7 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
   const [userInfo, setUserInfo] = useState<UserInfo>(initialUserInfo);
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   // 1. 수학 문제 상태
   const [showMathModal, setShowMathModal] = useState(false);
@@ -51,22 +55,65 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
   const [shakeProgress, setShakeProgress] = useState(0);
   const [subscription, setSubscription] = useState<any>(null);
 
+  const [showFakeCall, setShowFakeCall] = useState(false);
+
 
   // 🔄 최신 설정 불러오기
+  // MemberMain.tsx 내부
+  console.log("🎨 [Member] 화면 렌더링 중 - 현재 userInfo.is_premium:", userInfo.is_premium);
+  // MemberMain.tsx 내부의 fetchLatestData 함수 교체
+
   const fetchLatestData = async () => {
     try {
+      console.log("🔄 [Member] 연결된 매니저의 등급 확인 중..."); 
       setIsRefreshing(true);
-      const { data, error } = await supabase
+
+      // 1. 내 정보 가져오기
+      const { data: myData, error: myError } = await supabase
         .from('users')
         .select('*')
         .eq('id', userInfo.id)
         .single();
 
-      if (data && !error) {
-        setUserInfo(data);
+        if (myError || !myData) {
+          console.error("❌ 내 정보 조회 실패:", myError);
+          return;
+        }
+    
+        // 🕵️‍♂️ [범인 추적] 여기서 값이 제대로 찍히는지 확인하세요!
+        console.log("📅 [DEBUG] DB에서 가져온 last_seen_at:", myData.last_seen_at);
+
+      let isManagerPremium = false;
+
+      // 2. 나랑 연결된 매니저(manager_id)가 있다면, 그 사람의 등급 확인
+      if (myData.manager_id) {
+        const { data: managerData, error: managerError } = await supabase
+          .from('users')
+          .select('is_premium')
+          .eq('id', myData.manager_id)
+          .single();
+
+        if (managerData) {
+          isManagerPremium = managerData.is_premium;
+          console.log(`👨‍👩‍👧 매니저(${myData.manager_id.slice(0,4)}..)의 프리미엄 상태:`, isManagerPremium);
+        }
+      } else {
+        console.log("⚠️ 연결된 매니저가 없습니다.");
       }
+
+      // 3. [핵심] 내 등급(본인결제) OR 매니저 등급(가족결합) 둘 중 하나라도 true면 프리미엄!
+      const effectivePremiumStatus = myData.is_premium || isManagerPremium;
+
+      console.log("👑 최종 적용될 프리미엄 상태:", effectivePremiumStatus);
+
+      // 4. 상태 업데이트 (화면에는 합쳐진 결과로 반영됨)
+      setUserInfo({
+        ...myData,
+        is_premium: effectivePremiumStatus // 여기서 덮어씌웁니다!
+      });
+
     } catch (e) {
-      console.error(e);
+      console.error("데이터 갱신 실패:", e);
     } finally {
       setIsRefreshing(false);
     }
@@ -323,19 +370,26 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
     <View style={styles.container}>
       
       {/* 상단 바 */}
-      <View style={[styles.topBar, { paddingTop: insets.top + 10 }]}>
+      <View style={[styles.topBar, { paddingTop: insets.top + 20 }]}>
         <View>
           <Text style={styles.topBarGreeting}>안녕하세요,</Text>
           <Text style={styles.topBarName}>{userInfo.name || '회원'} 님!</Text>
         </View>
+
+        {/* ⚙️ 설정 버튼 */}
+        <TouchableOpacity 
+          style={styles.settingsBtn} 
+          onPress={() => setShowSettings(true)}
+        >
+          <Settings size={24} color="#4b5563" />
+        </TouchableOpacity>
       </View>
 
       <View style={styles.content}>
         
         <View style={styles.infoRow}>
           <Text style={styles.subGreeting}>
-            오늘도 활기찬 하루 보내세요!{'\n'}
-            가족들이 소식을 기다려요.
+            오늘도 무소식과 함께{'\n'}활기찬 하루 보내세요!
           </Text>
           <TouchableOpacity onPress={onBack} style={styles.miniLogoutBtn}>
             <LogOut size={16} color="#6b7280" />
@@ -366,25 +420,80 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
           <Text style={styles.actionSubLabel}>버튼을 눌러 안부를 전해주세요</Text>
         </View>
 
-        {/* 하단 상태 */}
+        {/* 하단 영역: (좌) 마지막 안부 / (우) 페이크 콜 */}
         <View style={[styles.footer, { paddingBottom: insets.bottom + 20 }]}>
-          <View style={styles.statusCard}>
-            <TouchableOpacity onPress={fetchLatestData} style={{ flexDirection:'row', alignItems:'center'}}>
-              <RefreshCw size={16} color="#6b7280" style={{ marginRight: 6 }}/>
-              <Text style={styles.statusTitle}>마지막으로 전한 안부</Text>
+          <View style={styles.bottomRow}>
+            
+            {/* (좌) 상태 카드: 마지막 안부 */}
+            <TouchableOpacity 
+              style={styles.halfCard} 
+              onPress={fetchLatestData}
+              activeOpacity={0.7}
+            >
+              <View style={styles.cardHeader}>
+                <RefreshCw size={14} color="#9ca3af" />
+                <Text style={styles.cardLabel}>마지막 안부</Text>
+              </View>
+              <View style={styles.cardBody}>
+                <CheckCircle size={24} color="#10b981" style={{ marginBottom: 8 }} />
+                <Text style={styles.cardValueText} numberOfLines={2}>
+                  {userInfo.last_seen_at 
+                    ? new Date(userInfo.last_seen_at).toLocaleTimeString('ko-KR', {
+                        hour: '2-digit', minute: '2-digit'
+                      })
+                    : '-'}
+                </Text>
+                <Text style={styles.cardDateText}>
+                  {userInfo.last_seen_at 
+                    ? new Date(userInfo.last_seen_at).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })
+                    : '기록 없음'}
+                </Text>
+              </View>
             </TouchableOpacity>
-            <View style={styles.statusRow}>
-              <CheckCircle size={20} color="#10b981" />
-              <Text style={styles.lastSeenText}>
-                {userInfo.last_seen_at 
-                  ? new Date(userInfo.last_seen_at).toLocaleString('ko-KR', {
-                      month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
-                    })
-                  : '아직 기록이 없습니다'}
-              </Text>
-            </View>
+
+            {/* (우) 기능 카드: 페이크 콜 */}
+            <TouchableOpacity 
+              style={[styles.halfCard, !userInfo.is_premium && styles.disabledCard]} 
+              onPress={() => {
+                if (userInfo.is_premium) {
+                  setShowFakeCall(true);
+                } else {
+                  Alert.alert("프리미엄 기능 🔒", "보호자가 프리미엄 회원이어야 사용할 수 있습니다.");
+                }
+              }}
+              activeOpacity={0.7}
+            >
+              <View style={styles.cardHeader}>
+                <Text style={[styles.cardLabel, { color: '#ef4444' }]}>긴급 도구</Text>
+              </View>
+              <View style={styles.cardBody}>
+                {/* 아이콘 */}
+                <View style={styles.iconCircle}>
+                  {/* Phone 아이콘이 없으면 아래 텍스트로 대체됨 */}
+                  <Text style={{fontSize: 24}}>📞</Text> 
+                </View>
+                <Text style={styles.cardValueText}>페이크 콜</Text>
+                <Text style={styles.cardDateText}>가짜 전화 걸기</Text>
+              </View>
+
+              {/* 프리미엄 잠금 오버레이 */}
+              {!userInfo.is_premium && (
+                <View style={styles.lockOverlay}>
+                  <Text style={{ fontSize: 24 }}>🔒</Text>
+                  <Text style={styles.lockText}>Premium</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          
           </View>
         </View>
+
+        {/* (맨 아래 모달들 모여있는 곳에 이것도 추가해주세요!) */}
+        <FakeCallModal 
+          visible={showFakeCall} 
+          onClose={() => setShowFakeCall(false)} 
+          callerName="우리 아빠 ❤️" 
+        />
       </View>
 
       {/* ================= MODAL 1: 수학 문제 ================= */}
@@ -496,6 +605,22 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
         </View>
       </Modal>
 
+      <MemberSettingsModal 
+        visible={showSettings}
+        onClose={() => setShowSettings(false)}
+        onLogout={() => {
+          setShowSettings(false); // 모달 끄고
+          onBack(); // 로그아웃 실행 (부모에게 전달)
+        }}
+      />
+      
+      {/* 페이크 콜 모달은 이제 '이름'을 prop으로 넘길 필요가 없어짐 (내부에서 알아서 가져옴) */}
+      <FakeCallModal 
+        visible={showFakeCall} 
+        onClose={() => setShowFakeCall(false)} 
+        // callerName prop 제거 (설정값 우선)
+      />
+
     </View>
   );
 }
@@ -539,9 +664,83 @@ const styles = StyleSheet.create({
 
   // 하단
   footer: { },
-  statusCard: {
-    backgroundColor: 'white', padding: 20, borderRadius: 20, marginBottom: 16,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', elevation: 2,
+  // styles 객체 안에 추가
+
+  // 하단 2분할 레이아웃
+  bottomRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12, // 카드 사이 간격
+  },
+  halfCard: {
+    flex: 1, // 반반 차지
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 16,
+    height: 140, // 높이 고정 (균형 맞추기)
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    justifyContent: 'space-between'
+  },
+  disabledCard: {
+    backgroundColor: '#f3f4f6', // 비활성화 시 회색
+    opacity: 0.9
+  },
+  
+  // 카드 내부 요소
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8
+  },
+  cardLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginLeft: 4,
+    fontWeight: '600'
+  },
+  cardBody: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+  },
+  cardValueText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#111827',
+    marginBottom: 2
+  },
+  cardDateText: {
+    fontSize: 12,
+    color: '#9ca3af'
+  },
+  iconCircle: {
+    width: 40, 
+    height: 40, 
+    borderRadius: 20, 
+    backgroundColor: '#fee2e2', 
+    justifyContent: 'center', 
+    alignItems: 'center',
+    marginBottom: 8
+  },
+
+  // 잠금 오버레이
+  lockOverlay: {
+    ...StyleSheet.absoluteFillObject, // 카드 꽉 채우기
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10
+  },
+  lockText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#6b7280',
+    marginTop: 4
   },
   statusTitle: { fontSize: 14, color: '#6b7280' },
   statusRow: { alignItems: 'flex-end' },
@@ -561,7 +760,7 @@ const styles = StyleSheet.create({
 
   // 수학 모달
   problemBox: { backgroundColor: '#eff6ff', paddingVertical: 20, paddingHorizontal: 40, borderRadius: 16, marginBottom: 24 },
-  problemText: { fontSize: 40, fontWeight: 'bold', color: '#3b82f6' },
+  problemText: { fontSize:32, fontWeight: 'bold', color: '#3b82f6' },
   input: { width: '100%', borderWidth: 2, borderColor: '#e5e7eb', borderRadius: 16, fontSize: 32, textAlign: 'center', paddingVertical: 12, marginBottom: 10, color: '#111827' },
 
   // 카메라 모달
@@ -578,4 +777,10 @@ const styles = StyleSheet.create({
   // 흔들기 모달
   progressBarBg: { width: '100%', height: 20, backgroundColor: '#e5e7eb', borderRadius: 10, overflow: 'hidden' },
   progressBarFill: { height: '100%', backgroundColor: '#f43f5e' },
+  settingsBtn: {
+    padding: 10,
+    backgroundColor: 'white',
+    borderRadius: 20,
+    elevation: 2, // 그림자
+  },
 });

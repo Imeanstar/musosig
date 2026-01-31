@@ -7,12 +7,13 @@ import { ChevronLeft, Mail, Lock, User, Phone } from 'lucide-react-native';
 import { useUserManagement } from '../hooks/useUserManagement';
 import { UserInfo } from '../types';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { PasswordResetModal } from './modals/PasswordResetModal';
 
 interface AuthManagerProps {
   onBack: () => void;
   initialMode?: 'login' | 'signup' | 'social_finish';
   socialUser?: UserInfo | null;
-  onSuccess?: () => void; // 👈 [핵심] 성공하면 실행할 함수 (부모한테 알림)
+  onSuccess?: () => void;
 }
 
 export function AuthManager({ onBack, initialMode = 'login', socialUser, onSuccess }: AuthManagerProps) {
@@ -26,6 +27,9 @@ export function AuthManager({ onBack, initialMode = 'login', socialUser, onSucce
   const [password, setPassword] = useState('');
   const [name, setName] = useState(socialUser?.name || '');
   const [phone, setPhone] = useState(socialUser?.phone || '');
+  
+  // 🔥 Password Reset Modal State
+  const [resetModalVisible, setResetModalVisible] = useState(false);
 
   useEffect(() => {
     setIsLoading(false);
@@ -56,13 +60,11 @@ export function AuthManager({ onBack, initialMode = 'login', socialUser, onSucce
         if (socialUser?.id) {
             success = await updateSocialUserInfo(socialUser.id, phone, name);
           } else {
-            // 혹시라도 id가 없으면 에러 처리
             Alert.alert("오류", "사용자 정보를 찾을 수 없습니다.");
             return;
           }
     }   
 
-    // 🚀 [핵심] 성공했다면 부모 컴포넌트(Index)에게 "새로고침해!"라고 알림
     if (success && onSuccess) {
       onSuccess();
     }
@@ -76,17 +78,15 @@ export function AuthManager({ onBack, initialMode = 'login', socialUser, onSucce
       <View style={[
         styles.header, 
         { 
-          paddingTop: insets.top > 0 ? insets.top : 20, // 상태바 높이만큼 내리기 (없으면 기본 20)
-          height: 60 + (insets.top > 0 ? insets.top : 20) // 전체 높이도 그만큼 늘려주기
+          paddingTop: insets.top > 0 ? insets.top : 20,
+          height: 60 + (insets.top > 0 ? insets.top : 20)
         }
       ]}>
-        {/* 뒤로가기 버튼 (소셜 완료 모드 아닐 때만 노출) */}
         {mode !== 'social_finish' ? (
           <TouchableOpacity onPress={onBack} style={styles.backBtn}>
             <ChevronLeft size={28} color="#333" />
           </TouchableOpacity>
         ) : (
-          // 소셜 완료 모드일 땐 뒤로가기 대신 빈 공간 or 로그아웃 버튼을 두는 게 좋음
           <View style={{ width: 44 }} /> 
         )}
         
@@ -94,14 +94,11 @@ export function AuthManager({ onBack, initialMode = 'login', socialUser, onSucce
           {mode === 'login' ? '이메일로 로그인' : 
            mode === 'signup' ? '새 계정 만들기' : '추가 정보 입력'}
         </Text>
-        {/* 타이틀 정렬을 위한 더미 뷰 */}
         <View style={{ width: 44 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        {/* ... (이전과 동일한 폼 내용 생략) ... */}
         
-        {/* 탭 전환 (소셜 모드일 땐 숨김) */}
         {mode !== 'social_finish' && (
           <View style={styles.tabContainer}>
             <TouchableOpacity 
@@ -120,7 +117,6 @@ export function AuthManager({ onBack, initialMode = 'login', socialUser, onSucce
         )}
 
         <View style={styles.form}>
-          {/* 소셜 모드 안내 문구 */}
           {mode === 'social_finish' && (
             <View style={{marginBottom: 20}}>
               <Text style={{fontSize: 16, color: '#4b5563'}}>
@@ -130,7 +126,6 @@ export function AuthManager({ onBack, initialMode = 'login', socialUser, onSucce
             </View>
           )}
 
-          {/* 이메일 & 비밀번호 (소셜 모드에선 숨김) */}
           {mode !== 'social_finish' && (
             <>
               <View style={styles.inputGroup}>
@@ -164,7 +159,6 @@ export function AuthManager({ onBack, initialMode = 'login', socialUser, onSucce
             </>
           )}
 
-          {/* 회원가입 OR 소셜추가정보 필드 */}
           {(mode === 'signup' || mode === 'social_finish') && (
             <>
               <View style={styles.inputGroup}>
@@ -193,13 +187,24 @@ export function AuthManager({ onBack, initialMode = 'login', socialUser, onSucce
                   />
                 </View>
                 {mode === 'social_finish' && (
-                   <Text style={styles.descText}>* 이미 가입된 번호는 사용할 수 없습니다.</Text>
+                    <Text style={styles.descText}>* 이미 가입된 번호는 사용할 수 없습니다.</Text>
                 )}
               </View>
             </>
           )}
 
-          {/* 제출 버튼 */}
+          {/* 🔥 [Fix] Only show 'Forgot Password' when in 'login' mode */}
+          {mode === 'login' && (
+            <TouchableOpacity 
+              onPress={() => setResetModalVisible(true)}
+              style={{ alignSelf: 'flex-end', marginTop: 8 }}
+            >
+              <Text style={{ color: '#6b7280', fontSize: 13, textDecorationLine: 'underline' }}>
+                비밀번호를 잊으셨나요?
+              </Text>
+            </TouchableOpacity>
+          )}
+
           <TouchableOpacity 
             style={[styles.submitBtn, !canSubmit() && styles.disabledBtn]}
             onPress={handleSubmit}
@@ -214,13 +219,19 @@ export function AuthManager({ onBack, initialMode = 'login', socialUser, onSucce
               </Text>
             )}
           </TouchableOpacity>
-          {/* 👇 [추가] 버튼이 비활성화된 이유를 작게 보여줍니다 */}
+
           {!canSubmit() && mode === 'social_finish' && (
-             <View style={{ marginTop: 10, alignItems: 'center' }}>
-               {!isValidName && <Text style={{ color: '#ef4444', fontSize: 13 }}>* 이름을 입력해주세요 (2글자 이상)</Text>}
-               {!isValidPhone && <Text style={{ color: '#ef4444', fontSize: 13 }}>* 전화번호를 입력해주세요</Text>}
-             </View>
+              <View style={{ marginTop: 10, alignItems: 'center' }}>
+                {!isValidName && <Text style={{ color: '#ef4444', fontSize: 13 }}>* 이름을 입력해주세요 (2글자 이상)</Text>}
+                {!isValidPhone && <Text style={{ color: '#ef4444', fontSize: 13 }}>* 전화번호를 입력해주세요</Text>}
+              </View>
           )}
+
+          {/* 🔥 Modal Component placed correctly */}
+          <PasswordResetModal 
+            visible={resetModalVisible} 
+            onClose={() => setResetModalVisible(false)} 
+          />
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -230,15 +241,12 @@ export function AuthManager({ onBack, initialMode = 'login', socialUser, onSucce
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
   header: { 
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', // 정렬 수정
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 16, 
-    height: 60, 
     borderBottomWidth: 1, borderBottomColor: '#f3f4f6',
-    paddingTop: 8 // 👈 [요청 반영] 상단 패딩 추가
   },
   backBtn: { padding: 8 },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#1f2937' },
-  // ... (나머지 스타일은 동일)
   content: { padding: 24 },
   tabContainer: { 
     flexDirection: 'row', backgroundColor: '#f3f4f6', borderRadius: 12, padding: 4, marginBottom: 32 

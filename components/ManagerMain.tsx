@@ -47,6 +47,8 @@ interface MemberData extends UserInfo {
 }
 
 const { width } = Dimensions.get('window');
+const MAX_BASIC_MEMBERS = 3;
+const MAX_PREMIUM_MEMBERS = 10; // 기획상 10명(무제한급)
 
 export function ManagerMain({ onBack, userInfo }: ManagerMainProps) {
   const insets = useSafeAreaInsets();
@@ -77,6 +79,36 @@ export function ManagerMain({ onBack, userInfo }: ManagerMainProps) {
   useEffect(() => {
     if (userInfo) fetchMembers();
   }, [userInfo]);
+
+  // 🔥 [NEW] 멤버 추가 버튼 클릭 시 실행될 검사 함수
+  const handleOpenInviteModal = () => {
+    const currentCount = members.length;
+    // [Case 1] 일반 회원(Basic)이 3명 꽉 찼을 때 -> 차단 🛑
+    if (!currentUser?.is_premium && currentCount >= MAX_BASIC_MEMBERS) {
+      Alert.alert(
+        "멤버 추가 제한 🔒",
+        `베이직 플랜은 최대 ${MAX_BASIC_MEMBERS}명까지만 등록 가능합니다.\n프리미엄으로 업그레이드하여 가족 모두를 지켜주세요!`,
+        [
+          { text: "취소", style: "cancel" },
+          { 
+            text: "업그레이드", 
+            onPress: () => setShowPremiumModal(true), // 결제 모달 열기
+            style: "default" 
+          }
+        ]
+      );
+      return; // ⛔ 여기서 멈춤 (모달 안 열림)
+    }
+
+    // [Case 2] 프리미엄 회원이 10명 꽉 찼을 때 -> 차단
+    if (userInfo?.is_premium && currentCount >= MAX_PREMIUM_MEMBERS) {
+      Alert.alert("등록 한도 초과", "최대 10명까지만 등록 가능합니다.");
+      return;
+    }
+
+    // [통과] 제한에 안 걸리면 초대 모달 열기 ✅
+    setShowInviteModal(true);
+  };
 
   // 초대 코드 생성 핸들러
   const handleGenerateCode = async (nickname: string, relation: string): Promise<string> => {
@@ -224,16 +256,7 @@ export function ManagerMain({ onBack, userInfo }: ManagerMainProps) {
         <View style={styles.headerContent}>
           <Text style={styles.headerTitle}>희소식</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            {!userInfo?.is_premium && (
-              <TouchableOpacity 
-                onPress={() => setShowPremiumModal(true)}
-                style={styles.upgradeButton}
-              >
-                <Crown size={14} color="#fbbf24" fill="#fbbf24" />
-                <Text style={styles.upgradeButtonText}>UPGRADE</Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity style={styles.addButton} onPress={() => setShowInviteModal(true)}>
+            <TouchableOpacity style={styles.addButton} onPress={handleOpenInviteModal}>
               <Plus color="white" size={20} />
               <Text style={styles.addButtonText}>멤버 추가</Text>
             </TouchableOpacity>
