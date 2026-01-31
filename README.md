@@ -1,12 +1,12 @@
 # 🏥 무소식(無消息) - 1인 가구 안부 확인 앱
 
-> **Manager & Member** 역할 기반 안부 확인 시스템 (v2.2.1)
+> **Manager & Member** 역할 기반 안부 확인 시스템 (v2.3.0)
 
 ![React Native](https://img.shields.io/badge/React_Native-0.76.9-61DAFB?logo=react)
 ![Expo](https://img.shields.io/badge/Expo-~52.0-000020?logo=expo)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.3.3-3178C6?logo=typescript)
 ![Supabase](https://img.shields.io/badge/Supabase-Backend-3ECF8E?logo=supabase)
-![Version](https://img.shields.io/badge/Version-2.2.1-orange)
+![Version](https://img.shields.io/badge/Version-2.3.0-orange)
 
 ## 📋 목차
 - [개요](#-개요)
@@ -76,7 +76,47 @@
 
 ## 🔄 최근 주요 업데이트
 
-### 🎉 v2.2.1 (2026.01.30) - Code Quality & Architecture Improvement
+### 🎉 v2.3.0 (2026.01.31) - Safety Features & Code Optimization
+
+#### 1. **긴급 안전 기능 추가** 🚨
+- **페이크 콜 시스템**: 위험 상황 탈출 도구
+  - 실시간 전화 수신 UI 시뮬레이션
+  - 커스터마이징 가능한 발신자 이름
+  - 벨소리 선택 및 무음 모드 대응
+  - 진동 패턴 (1초 진동, 2초 대기)
+- **멤버 설정 모달**: 페이크 콜 설정 관리
+
+#### 2. **스마트 알림 시스템** 🔔
+- 4개 Edge Functions 신규 추가:
+  - `emergency-sms-flag`: SMS 중복 방지 (Flag 기반)
+  - `manager-alert-half`: 절반 시간 도달 시 알림
+  - `daily-nudge-21h`: 매일 21시 리마인더
+  - `cleanup-data`: 오래된 데이터 자동 정리
+
+#### 3. **대규모 코드 리팩토링 (Round 2)** 🏗️
+- **ManagerMain.tsx**: 660줄 → 524줄 (21%↓)
+- **MemberMain.tsx**: 786줄 → 373줄 (53%↓)
+- **총 코드 감소**: 1,446줄 → 897줄 (38%↓)
+
+#### 4. **Hooks 확장** 🪝
+- 7개 → 13개 Hook으로 확장
+- 신규 Hook:
+  - `useMemberLimit`: 멤버 추가 인원 제한
+  - `useDetailModal`: 날짜 상세 모달 상태
+  - `useMathChallenge`: 수학 문제 생성/검증
+  - `useCameraCapture`: 카메라 촬영 관리
+  - `useShakeDetector`: 가속도계 흔들기 감지
+
+#### 5. **컴포넌트 모듈화** 🧩
+- 5개 신규 모달 컴포넌트 추가:
+  - `DateDetailModal`: 캘린더 날짜 상세
+  - `MathChallengeModal`: 수학 문제 모달
+  - `CameraModal`: 카메라 촬영 모달
+  - `ShakeModal`: 흔들기 진행 모달
+  - `FakeCallModal`: 페이크 콜 모달
+
+<details>
+<summary><strong>📜 v2.2.1 업데이트 히스토리 보기</strong></summary>
 
 #### 1. **대규모 코드 리팩토링** 🏗️
 - **ManagerMain.tsx**: 805줄 → 314줄 (61% 감소)
@@ -162,6 +202,9 @@
 ---
 
 # 📸 Version Log
+
+## Ver 2.3.0 (2026.01.31) - Safety & Smart Alerts
+> 긴급 안전 기능 + 스마트 알림 시스템 + 코드 최적화 (38% 감소)
 
 ## Ver 2.2.1 (2026.01.30) - Code Quality Improvement
 > 대규모 리팩토링으로 코드 품질 향상 (61% 코드 감소)
@@ -264,69 +307,93 @@
 - **Version Control**: Git + GitHub
 - **Migration**: SQL 스크립트 기반 DB 버전 관리
 
-## 📁 프로젝트 구조 (v2.2)
+## 📁 프로젝트 구조 (v2.3)
 
 ```
 musosik/
-├── app/                          # Expo Router 화면
-│   ├── index.tsx                # 메인 라우팅
+├── app/                            # Expo Router 화면
+│   ├── index.tsx                  # 메인 라우팅
 │   ├── auth/
-│   │   ├── callback.tsx         # OAuth 콜백
-│   │   └── certification.tsx    # 본인인증 (준비 중)
-│   └── _layout.tsx              # 전역 레이아웃
+│   │   ├── callback.tsx           # OAuth 콜백
+│   │   └── certification.tsx      # 본인인증 (준비 중)
+│   └── _layout.tsx                # 전역 레이아웃
 │
-├── components/                   # 재사용 컴포넌트
-│   ├── ManagerMain.tsx          # [REFACTORED] Manager 대시보드 (314줄)
-│   ├── MemberMain.tsx           # Member 체크인 화면
-│   ├── MemberPairing.tsx        # Member 코드 입력 화면
-│   ├── RoleSelection.tsx        # 역할 선택 화면
-│   ├── AuthManager.tsx          # 이메일 인증 화면
-│   ├── manager/                 # [NEW] Manager 전용 컴포넌트
-│   │   ├── InviteCodeModal.tsx  # 초대 코드 모달
-│   │   ├── ProfileTab.tsx       # 프로필/설정 탭
-│   │   └── CalendarTab.tsx      # 캘린더 탭
-│   └── modals/
-│       ├── SubscriptionModal.tsx # 구독 관리
-│       └── SettingsModal.tsx    # 설정 모달
+├── components/                     # 재사용 컴포넌트
+│   ├── ManagerMain.tsx            # [v2.3] Manager 대시보드 (524줄 → 리팩토링)
+│   ├── MemberMain.tsx             # [v2.3] Member 체크인 (373줄 → 리팩토링)
+│   ├── MemberPairing.tsx          # Member 페어링 (코드 입력)
+│   ├── RoleSelection.tsx          # 역할 선택 화면
+│   ├── AuthManager.tsx            # 이메일 인증 화면
+│   ├── LegalModal.tsx             # 법률 문서 WebView
+│   │
+│   ├── manager/                   # Manager 전용 컴포넌트
+│   │   ├── InviteCodeModal.tsx    # 초대 코드 생성 모달
+│   │   ├── ProfileTab.tsx         # 프로필 탭
+│   │   ├── SettingsTab.tsx        # 설정 탭 (DnD 포함)
+│   │   ├── CalendarTab.tsx        # 캘린더 탭
+│   │   └── DateDetailModal.tsx    # [v2.3] 날짜 상세 모달
+│   │
+│   └── modals/                    # 공통 모달
+│       ├── FakeCallModal.tsx      # [v2.3] 페이크 콜 (긴급 상황)
+│       ├── MemberSettingsModal.tsx # [v2.3] Member 설정
+│       ├── MathChallengeModal.tsx # [v2.3] 수학 문제 (리팩토링)
+│       ├── CameraModal.tsx        # [v2.3] 카메라 촬영
+│       ├── ShakeModal.tsx         # [v2.3] 흔들기 진행
+│       ├── SubscriptionModal.tsx  # 구독 관리
+│       ├── SettingsModal.tsx      # 설정 모달
+│       ├── RegisterModal.tsx      # 회원가입 모달
+│       └── PasswordResetModal.tsx # 비밀번호 재설정
 │
-├── hooks/                        # 커스텀 훅 (모듈화)
-│   ├── useUserManagement.ts     # [REFACTORED] Facade Pattern
-│   ├── useAuth.ts               # [NEW] 인증 전담
-│   ├── useDeepLink.ts           # [NEW] OAuth 콜백
-│   ├── useUserProfile.ts        # [NEW] 프로필 CRUD
-│   ├── useMemberList.ts         # [NEW] 멤버 목록 관리
-│   ├── useInviteCode.ts         # [NEW] 초대 코드 생성
-│   ├── useCalendar.ts           # [NEW] 캘린더 데이터
-│   ├── useCheckIn.ts            # 출석 체크
-│   └── usePremium.ts            # 프리미엄 기능
+├── hooks/                          # 커스텀 훅 (13개)
+│   ├── useUserManagement.ts       # [Facade] 하위 호환 유지
+│   ├── useAuth.ts                 # 인증 전담
+│   ├── useDeepLink.ts             # OAuth 딥링크
+│   ├── useUserProfile.ts          # 프로필 CRUD
+│   ├── useMemberList.ts           # 멤버 목록 관리
+│   ├── useInviteCode.ts           # 초대 코드 생성
+│   ├── useCalendar.ts             # 캘린더 데이터
+│   ├── useMemberLimit.ts          # [v2.3] 멤버 추가 제한
+│   ├── useDetailModal.ts          # [v2.3] 상세 모달 상태
+│   ├── useMathChallenge.ts        # [v2.3] 수학 문제 Hook
+│   ├── useCameraCapture.ts        # [v2.3] 카메라 Hook
+│   ├── useShakeDetector.ts        # [v2.3] 흔들기 감지
+│   └── useCheckIn.ts              # 출석 체크
 │
-├── utils/                        # 유틸리티 함수
-│   ├── storage.ts               # AsyncStorage 관리
-│   ├── date.ts                  # 날짜 관련
-│   └── notificationHelper.ts    # 푸시 알림
+├── assets/                         # [v2.3] 에셋 파일
+│   ├── icon.png                   # 앱 아이콘
+│   ├── splash.png                 # 스플래시 이미지
+│   └── ringtone1.mp3              # [v2.3] 페이크 콜 벨소리
 │
-├── types/                        # TypeScript 타입
-│   └── index.ts                 # Profile, Manager, Member
+├── utils/                          # 유틸리티 함수
+│   ├── storage.ts                 # AsyncStorage 관리
+│   ├── date.ts                    # 날짜 관련
+│   └── notificationHelper.ts      # 푸시 알림
 │
-├── constants/                    # 상수
-│   └── index.ts                 # 스토리지 키, 메시지
+├── types/                          # TypeScript 타입
+│   └── index.ts                   # Profile, Manager, Member, UserSettings
 │
-├── lib/                          # 외부 라이브러리
-│   └── supabase.ts              # Supabase 클라이언트
+├── constants/                      # 상수
+│   └── index.ts                   # 스토리지 키, 메시지
 │
-└── supabase/                     # Supabase 설정
+├── lib/                            # 외부 라이브러리
+│   └── supabase.ts                # Supabase 클라이언트
+│
+└── supabase/                       # Supabase 설정
     ├── migrations/
     │   └── 20260120_v2.0_schema.sql
-    └── functions/
-        ├── check-24h-push/      # 24시간 푸시 알림
-        └── emergency-48h/       # 48시간 긴급 SMS
+    └── functions/                  # [v2.3] Edge Functions (4개)
+        ├── emergency-sms-flag/    # [v2.3] 긴급 SMS (Flag 기반)
+        ├── manager-alert-half/    # [v2.3] 절반 시간 알림
+        ├── daily-nudge-21h/       # [v2.3] 21시 리마인더
+        └── cleanup-data/          # [v2.3] 자동 데이터 정리
 ```
 
-### v2.2 주요 변경 사항
-- ✅ **Hooks 모듈화**: 1개 → 7개 (책임 분리)
-- ✅ **컴포넌트 세분화**: manager/ 폴더 신규
-- ✅ **평균 파일 크기**: 143줄 (관리 용이)
-- ✅ **아키텍처**: Facade Pattern, SRP 적용
+### v2.3 주요 변경 사항
+- ✅ **대규모 리팩토링**: ManagerMain (660→524줄), MemberMain (786→373줄)
+- ✅ **Hooks 확장**: 7개 → 13개 (멤버 제한, 모달 상태, 인증 방식)
+- ✅ **페이크 콜 시스템**: 긴급 상황 대응 기능 추가
+- ✅ **모달 분리**: 5개 신규 모달 컴포넌트 (Math, Camera, Shake 등)
+- ✅ **스마트 알림**: 4개 Edge Functions (절반 알림, SMS Flag, 리마인더, 정리)
 
 ## 🚀 시작하기
 
@@ -806,5 +873,5 @@ v2.0에서는 더 많은 사람들이 서로를 돌볼 수 있도록
 ---
 
 **Project Repository**: https://github.com/Imeanstar/musosig  
-**Version**: 2.2.1 (2026.01.30)  
+**Version**: 2.3.0 (2026.01.31)  
 **License**: MIT
