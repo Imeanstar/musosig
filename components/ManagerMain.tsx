@@ -26,12 +26,15 @@ import { useUserManagement } from '../hooks/useUserManagement';
 import { useMemberList } from '../hooks/useMemberList';
 import { useInviteCode } from '../hooks/useInviteCode';
 import { useCalendar } from '../hooks/useCalendar';
+import { useMemberLimit } from '../hooks/useMemberLimit';
+import { useDetailModal } from '../hooks/useDetailModal';
 
 // Components
 import { InviteCodeModal } from './manager/InviteCodeModal';
 import { ProfileTab } from './manager/ProfileTab';
 import { SettingsTab } from './manager/SettingsTab';
 import { SubscriptionModal } from './modals/SubscriptionModal';
+import { DateDetailModal } from './manager/DateDetailModal';
 
 
 // Types
@@ -47,32 +50,36 @@ interface MemberData extends UserInfo {
 }
 
 const { width } = Dimensions.get('window');
-const MAX_BASIC_MEMBERS = 3;
-const MAX_PREMIUM_MEMBERS = 10; // 기획상 10명(무제한급)
 
 export function ManagerMain({ onBack, userInfo }: ManagerMainProps) {
   const insets = useSafeAreaInsets();
-  const { deleteAccount } = useUserManagement();
   
-  // 상태 (3개로 축소!)
+  // Hooks
+  const { deleteAccount } = useUserManagement();
+  const { checkCanAddMember } = useMemberLimit();
+  const { members, refreshing, fetchMembers, onRefresh } = useMemberList(userInfo?.id);
+  const { isCodeLoading, generateInviteCode, generateRelinkCode } = useInviteCode();
+  const { 
+    isVisible: detailModalVisible,
+    selectedDate: selectedDateLog,
+    showPhoto,
+    openDetail,
+    closeDetail,
+    togglePhoto
+  } = useDetailModal();
+  
+  // 상태
   const [activeTab, setActiveTab] = useState<'list' | 'notifications' | 'profile'>('list');
   const [selectedMember, setSelectedMember] = useState<MemberData | null>(null);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const [currentUser, setCurrentUser] = useState<UserInfo>(userInfo);
 
-  // 커스텀 Hooks (비즈니스 로직 분리)
-  const { members, refreshing, fetchMembers, onRefresh } = useMemberList(userInfo?.id);
-  const { isCodeLoading, generateInviteCode, generateRelinkCode } = useInviteCode();
+  // 선택된 멤버의 캘린더 데이터
   const { currentDate, checkInLogs, changeMonth, getDaysInMonth } = useCalendar(
     selectedMember?.id, 
     userInfo.is_premium ?? false
   );
-
-  const [detailModalVisible, setDetailModalVisible] = useState(false);
-  const [selectedDateLog, setSelectedDateLog] = useState<{ date: string, log: any | null } | null>(null);
-  const [showPhoto, setShowPhoto] = useState(false);
-
-  const [currentUser, setCurrentUser] = useState<UserInfo>(userInfo);
   
   
   // 초기 로드
@@ -80,34 +87,17 @@ export function ManagerMain({ onBack, userInfo }: ManagerMainProps) {
     if (userInfo) fetchMembers();
   }, [userInfo]);
 
-  // 🔥 [NEW] 멤버 추가 버튼 클릭 시 실행될 검사 함수
+  // 멤버 추가 버튼 클릭
   const handleOpenInviteModal = () => {
-    const currentCount = members.length;
-    // [Case 1] 일반 회원(Basic)이 3명 꽉 찼을 때 -> 차단 🛑
-    if (!currentUser?.is_premium && currentCount >= MAX_BASIC_MEMBERS) {
-      Alert.alert(
-        "멤버 추가 제한 🔒",
-        `베이직 플랜은 최대 ${MAX_BASIC_MEMBERS}명까지만 등록 가능합니다.\n프리미엄으로 업그레이드하여 가족 모두를 지켜주세요!`,
-        [
-          { text: "취소", style: "cancel" },
-          { 
-            text: "업그레이드", 
-            onPress: () => setShowPremiumModal(true), // 결제 모달 열기
-            style: "default" 
-          }
-        ]
-      );
-      return; // ⛔ 여기서 멈춤 (모달 안 열림)
+    const canAdd = checkCanAddMember(
+      members.length,
+      currentUser?.is_premium ?? false,
+      () => setShowPremiumModal(true)
+    );
+    
+    if (canAdd) {
+      setShowInviteModal(true);
     }
-
-    // [Case 2] 프리미엄 회원이 10명 꽉 찼을 때 -> 차단
-    if (userInfo?.is_premium && currentCount >= MAX_PREMIUM_MEMBERS) {
-      Alert.alert("등록 한도 초과", "최대 10명까지만 등록 가능합니다.");
-      return;
-    }
-
-    // [통과] 제한에 안 걸리면 초대 모달 열기 ✅
-    setShowInviteModal(true);
   };
 
   // 초대 코드 생성 핸들러
@@ -180,16 +170,10 @@ export function ManagerMain({ onBack, userInfo }: ManagerMainProps) {
     );
   };
 
-  // 🔥 날짜 클릭 핸들러 수정
+  // 날짜 클릭 핸들러
   const handleDayPress = (day: number, dateKey: string) => {
-    const log = checkInLogs.get(dateKey);
-    const todayKey = new Date().toISOString().split('T')[0];
-    
-    if (dateKey > todayKey) return; // 미래 날짜 방지
-
-    setShowPhoto(false); // 🔥 [NEW] 모달 열 때 사진은 일단 숨김!
-    setSelectedDateLog({ date: `${currentDate.getMonth() + 1}월 ${day}일`, log: log || null });
-    setDetailModalVisible(true);
+    const log = checkInLogs.get(dateKey) || null;
+    openDetail(day, dateKey, log);
   };
 
   const refreshUserData = async () => {
@@ -463,80 +447,14 @@ export function ManagerMain({ onBack, userInfo }: ManagerMainProps) {
       </View>
 
       {/* 모달들 */}
-
-      {/* 날짜 상세 모달 */}
-      <Modal
+      <DateDetailModal 
         visible={detailModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setDetailModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.detailCard}>
-            
-            {/* 닫기 버튼 */}
-            <TouchableOpacity style={styles.closeIcon} onPress={() => setDetailModalVisible(false)}>
-              <X size={24} color="#6b7280" />
-            </TouchableOpacity>
-
-            <Text style={styles.detailDateTitle}>{selectedDateLog?.date} 기록</Text>
-
-            {selectedDateLog?.log ? (
-              // ✅ 출석한 날
-              <View style={styles.detailContent}>
-                <CheckCircle size={48} color="#10b981" style={{ marginBottom: 12 }} />
-                <Text style={styles.detailTitleGreen}>출석 완료!</Text>
-                
-                <Text style={styles.detailDesc}>
-                  "{selectedDateLog.log.check_in_type || '터치'}"(으)로{'\n'}출석한 날입니다.
-                </Text>
-
-                {/* 🔥 [여기!] 사진 로직 변경 */}
-                {selectedDateLog.log.proof_url && (
-                  <View style={{ width: '100%', alignItems: 'center', marginTop: 16 }}>
-                    
-                    {!showPhoto ? (
-                      // 1. 버튼: 아직 안 눌렀을 때
-                      <TouchableOpacity 
-                        style={styles.showPhotoBtn} 
-                        onPress={() => setShowPhoto(true)}
-                      >
-                        <Camera size={20} color="#4b5563" style={{ marginRight: 8 }} />
-                        <Text style={styles.showPhotoBtnText}>인증 사진 확인하기</Text>
-                      </TouchableOpacity>
-                    ) : (
-                      // 2. 이미지: 버튼 눌렀을 때
-                      <View style={styles.photoContainer}>
-                        <Image 
-                          source={{ uri: selectedDateLog.log.proof_url }} 
-                          style={styles.proofPhoto}
-                          resizeMode="cover"
-                        />
-                      </View>
-                    )}
-
-                  </View>
-                )}
-              </View>
-            ) : (
-              // ❌ 결석한 날 (그대로 유지)
-              <View style={styles.detailContent}>
-                <XCircle size={48} color="#ef4444" style={{ marginBottom: 12 }} />
-                <Text style={styles.detailTitleRed}>미출석</Text>
-                <Text style={styles.detailDesc}>출석하지 않은 날입니다.</Text>
-                <Text style={styles.detailSubDesc}>전화로 안부를 물어보세요.</Text>
-              </View>
-            )}
-
-            <TouchableOpacity 
-              style={styles.confirmButton} 
-              onPress={() => setDetailModalVisible(false)}
-            >
-              <Text style={styles.confirmButtonText}>닫기</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+        onClose={closeDetail}
+        date={selectedDateLog?.date || ''}
+        log={selectedDateLog?.log || null}
+        showPhoto={showPhoto}
+        onTogglePhoto={togglePhoto}
+      />
 
       <InviteCodeModal 
         visible={showInviteModal}
@@ -602,58 +520,4 @@ const styles = StyleSheet.create({
   tabItem: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   tabText: { fontSize: 12, color: '#9ca3af', marginTop: 4 },
   activeTabText: { color: '#3b82f6', fontWeight: 'bold' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
-  detailCard: { width: '85%', backgroundColor: 'white', borderRadius: 20, padding: 24, alignItems: 'center', elevation: 5 },
-  closeIcon: { position: 'absolute', top: 16, right: 16, padding: 4 },
-  detailDateTitle: { fontSize: 18, fontWeight: 'bold', color: '#374151', marginBottom: 20 },
-  detailContent: { alignItems: 'center', width: '100%' },
-  detailTitleGreen: { fontSize: 22, fontWeight: 'bold', color: '#10b981', marginBottom: 8 },
-  detailTitleRed: { fontSize: 22, fontWeight: 'bold', color: '#ef4444', marginBottom: 8 },
-  detailDesc: { fontSize: 16, color: '#4b5563', textAlign: 'center', lineHeight: 24 },
-  detailSubDesc: { fontSize: 14, color: '#9ca3af', marginTop: 4 },
-  photoContainer: { marginTop: 16, width: '100%', alignItems: 'center' },
-  photoLabel: { fontSize: 14, fontWeight: 'bold', color: '#4b5563', marginBottom: 8, alignSelf: 'flex-start' },
-  proofPhoto: { width: '100%', height: 200, borderRadius: 12, backgroundColor: '#f3f4f6' },
-  confirmButton: { marginTop: 24, backgroundColor: '#3b82f6', width: '100%', paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
-  confirmButtonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
-  showPhotoBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    backgroundColor: '#f3f4f6', paddingVertical: 12, paddingHorizontal: 20,
-    borderRadius: 12, width: '100%', borderWidth: 1, borderColor: '#e5e7eb'
-  },
-  showPhotoBtnText: { fontSize: 16, fontWeight: '600', color: '#374151' },
-  // 멤버 삭제 카드 스타일
-  deleteCard: { 
-    marginTop: 20, 
-    backgroundColor: '#fff', 
-    padding: 20, 
-    borderRadius: 16, 
-    elevation: 3, 
-    borderWidth: 1, 
-    borderColor: '#fee2e2' // 연한 빨간 테두리
-  },
-  deleteTitle: { 
-    fontSize: 18, 
-    fontWeight: 'bold', 
-    color: '#ef4444', // 빨간색 제목
-    marginBottom: 8 
-  },
-  deleteDesc: { 
-    fontSize: 14, 
-    color: '#6b7280', 
-    marginBottom: 16, 
-    lineHeight: 20 
-  },
-  deleteButton: { 
-    backgroundColor: '#fee2e2', // 연한 빨간 배경
-    paddingVertical: 14, 
-    borderRadius: 12, 
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#fca5a5'
-  },
-  deleteButtonText: { 
-    color: '#dc2626', // 진한 빨간 글씨
-    fontWeight: 'bold', 
-    fontSize: 16},
 });
