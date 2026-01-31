@@ -34,6 +34,7 @@ export interface Profile {
   push_token?: string | null;         // 푸시 알림 토큰
   last_seen_at?: string | null;       // 마지막 안부 신고 시간
   emergency_contacts?: string[];      // [보완] 비상연락망 (배열)
+  premium_expiry_at?: string | null;
   
   
   // 시스템 필드

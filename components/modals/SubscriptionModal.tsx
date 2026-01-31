@@ -77,9 +77,9 @@ export function SubscriptionModal({ visible, onClose }: SubscriptionModalProps) 
           {/* 혜택 리스트 */}
           <View style={styles.benefitsContainer}>
             <BenefitItem text="등록 가능한 가족 수 증가 (기본 3명)" />
-            <BenefitItem text="배터리 방전 직전 위치/알림 전송" />
             <BenefitItem text="과거 출석 기록 1년 보관 (기본 3개월)" />
             <BenefitItem text="광고 없는 쾌적한 환경" />
+            <BenefitItem text="What's More...?" />
           </View>
 
           <View style={{ height: 30 }} />

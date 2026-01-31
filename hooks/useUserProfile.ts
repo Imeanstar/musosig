@@ -50,18 +50,15 @@ export const useUserProfile = (): UseUserProfileReturn => {
         return null;
       }
 
-      // console.log("🔍 [Profile] 조회 시작 ID:", session.user.id);
-
-      // 2. DB에서 프로필 조회 (🔥 핵심 수정 부분)
+      // 2. DB에서 프로필 조회
       const { data: dbUser, error } = await supabase
         .from('users')
         .select('*')
         .eq('id', session.user.id)
-        .limit(1)       // 🔥 [수정 1] 무조건 1개만 가져오라고 강제함
-        .maybeSingle(); // 🔥 [수정 2] 에러를 뱉지 않고 없으면 null, 있으면 객체 반환
+        .limit(1)
+        .maybeSingle();
 
       if (error) {
-        // 진짜 DB 에러인 경우만 로그 출력
         console.warn('[Profile] DB 조회 에러:', error.message);
       }
 
@@ -74,8 +71,27 @@ export const useUserProfile = (): UseUserProfileReturn => {
           setUserInfo(localUser);
           return localUser;
         }
-        
-        return null; // DB에도 없고 로컬에도 없으면 null
+        return null;
+      }
+
+      // 🔥 [Step 3. 추가됨] 프리미엄 만료일 체크 로직
+      // DB에 is_premium이 true인데, 날짜가 지났으면 -> false로 강제 변경
+      if (dbUser.is_premium && dbUser.premium_expiry_at) {
+        const now = new Date();
+        const expiryDate = new Date(dbUser.premium_expiry_at);
+
+        if (now > expiryDate) {
+          console.log('[Profile] 🚫 프리미엄 기간 만료됨! 등급을 내립니다.');
+          
+          // 1. DB 업데이트 (await로 확실하게 처리)
+          await supabase
+            .from('users')
+            .update({ is_premium: false })
+            .eq('id', session.user.id);
+            
+          // 2. 현재 메모리에 있는 데이터도 즉시 수정 (그래야 아래 Step 4에서 적용됨)
+          dbUser.is_premium = false; 
+        }
       }
 
       // 4. UserInfo 객체 생성
@@ -94,9 +110,12 @@ export const useUserProfile = (): UseUserProfileReturn => {
         push_token: dbUser.push_token,
         user_id: dbUser.id,
         
-        // 🔥 [추가] 중요 데이터 누락 방지
         last_seen_at: dbUser.last_seen_at,
         settings: dbUser.settings,
+        
+        // 🔥 [추가] 날짜 정보도 state에 포함시켜야 UI에서 확인 가능
+        premium_started_at: dbUser.premium_started_at,
+        premium_expiry_at: dbUser.premium_expiry_at,
       };
 
       // 5. 로컬 스토리지 저장
@@ -106,7 +125,6 @@ export const useUserProfile = (): UseUserProfileReturn => {
       // 6. 푸시 토큰 등록
       await registerPushToken(user);
 
-      // console.log('[Profile] 프로필 로드 완료:', user.name);
       return user;
 
     } catch (error) {
@@ -200,16 +218,55 @@ export const useUserProfile = (): UseUserProfileReturn => {
     }
   };
 
-  // ... (나머지 togglePremium, deleteAccount 등은 기존과 동일)
+  /**
+   * 프리미엄 상태 토글 (개발/테스트용 + 날짜 업데이트 추가)
+   */
   const togglePremium = async (): Promise<void> => {
     if (!userInfo) return;
+
     try {
       const newStatus = !userInfo.is_premium;
-      await supabase.from('users').update({ is_premium: newStatus }).eq('id', userInfo.id);
+      const now = new Date();
+      
+      // 업데이트할 데이터 객체 만들기
+      const updates: any = {
+        is_premium: newStatus,
+        updated_at: now.toISOString(),
+      };
+
+      // 🔥 [핵심] 프리미엄을 '켤 때'만 시작일과 만료일을 갱신합니다.
+      if (newStatus === true) {
+        updates.premium_started_at = now.toISOString();
+        
+        // (선택) 만료일을 30일 뒤로 설정하고 싶다면?
+        const expiryDate = new Date(now);
+        expiryDate.setDate(now.getDate() + 31); // 30일 추가
+        updates.premium_expiry_at = expiryDate.toISOString();
+      } 
+      // 끄는 경우(false)에는 날짜를 NULL로 할지, 기록으로 남길지 선택 (보통 그냥 둠)
+
+      // DB 업데이트
+      const { error } = await supabase
+        .from('users')
+        .update(updates)
+        .eq('id', userInfo.id);
+
+      if (error) throw error;
+
+      // 로컬 상태 즉시 반영
       await savePremiumStatus(newStatus);
-      setUserInfo({ ...userInfo, is_premium: newStatus });
+      setUserInfo({ 
+        ...userInfo, 
+        is_premium: newStatus,
+        // UI에 바로 반영되게 날짜도 로컬 state에 업데이트
+        premium_started_at: newStatus ? now.toISOString() : userInfo.premium_started_at 
+      });
+
+      console.log(`[Profile] 프리미엄 ${newStatus ? 'ON' : 'OFF'} (날짜 갱신됨)`);
+
     } catch (e) {
-      console.error(e);
+      console.error('[Profile] 프리미엄 상태 변경 실패:', e);
+      Alert.alert('오류', '상태 변경 실패');
     }
   };
 

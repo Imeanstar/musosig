@@ -154,6 +154,7 @@
 - 가독성 향상: 평균 파일 크기 82% 감소
 - 유지보수성: 모듈별 독립적 수정 가능
 - 테스트 용이성: Hook/컴포넌트 단독 테스트
+</details>
 
 <details>
 <summary><strong>📜 v2.0.1 업데이트 히스토리 보기</strong></summary>

@@ -149,7 +149,7 @@ export function ProfileTab({
         <MenuItem 
           icon={<Mail size={20} color="#4b5563" />}
           label="문의하기 / 버그 신고"
-          onPress={() => Linking.openURL('mailto:support@musosik.app')}
+          onPress={() => Linking.openURL('mailto:musosik4u@gmail.com')}
         />
       </View>
 
@@ -172,7 +172,7 @@ export function ProfileTab({
         />
       </View>
 
-      <Text style={styles.versionText}>앱 버전 v2.2.0</Text>
+      <Text style={styles.versionText}>앱 버전 v2.3.2</Text>
       <View style={{ height: 40 }} />
       
     </ScrollView>

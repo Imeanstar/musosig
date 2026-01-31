@@ -1,14 +1,15 @@
 /**
- * MemberMain.tsx (Refactored)
+ * MemberMain.tsx (Refactored & UX Fixed)
  * - 피보호자용 메인 화면
- * - Hooks 분리로 코드 간결화
+ * - 방어막 적용: 메인 화면에서 '로그아웃' 버튼 제거 (설정 메뉴로 이동됨)
+ * - 헤더 레이아웃 수정 완료
  */
 
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Heart, Calculator, Camera, Smartphone, CheckCircle, RefreshCw, LogOut, Settings } from 'lucide-react-native';
+import { Heart, Calculator, Camera, Smartphone, CheckCircle, RefreshCw, Settings } from 'lucide-react-native'; // LogOut 아이콘 제거
 import { supabase } from '../lib/supabase';
 import { UserInfo } from '../types';
 import { decode } from 'base64-arraybuffer';
@@ -48,6 +49,7 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
   // 초기화
   useEffect(() => {
     fetchLatestData();
+    // 흔들기 감지 해제는 컴포넌트 언마운트 시
     return () => shake.unsubscribe();
   }, []);
 
@@ -62,6 +64,7 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
 
       if (error || !myData) return;
 
+      // 매니저 프리미엄 여부 확인 (내 계정에 없으면 매니저 것 확인)
       let isManagerPremium = false;
       if (myData.manager_id) {
         const { data: managerData } = await supabase
@@ -82,7 +85,7 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
     }
   };
 
-  // 사진 업로드
+  // 사진 업로드 로직
   const uploadImage = async (uri: string): Promise<string> => {
     const ext = uri.split('.').pop()?.toLowerCase() || 'jpg';
     const fileName = `${userInfo.id}/${Date.now()}.${ext}`;
@@ -103,7 +106,7 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
     return publicUrl;
   };
 
-  // 체크인 완료
+  // 체크인 완료 처리
   const completeCheckIn = async (imageUri?: string | null, type: string = '클릭') => {
     try {
       setIsLoading(true);
@@ -113,6 +116,7 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
         uploadedUrl = await uploadImage(imageUri);
       }
 
+      // 1. 유저 정보 업데이트 (마지막 접속 시간)
       await supabase
         .from('users')
         .update({ 
@@ -122,6 +126,7 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
         })
         .eq('id', userInfo.id);
 
+      // 2. 로그 기록
       await supabase
         .from('check_in_logs')
         .insert({ 
@@ -130,8 +135,11 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
           proof_url: uploadedUrl 
         });
 
-      shake.unsubscribe();
+      shake.unsubscribe(); // 흔들기 중단
+      
       const message = uploadedUrl ? "사진과 함께 안부를 전했습니다! 📸" : "보호자에게 안부를 전했습니다! 👋";
+      
+      // 안부 전송 후 데이터 갱신
       Alert.alert("성공", message, [{ text: "확인", onPress: fetchLatestData }]);
 
     } catch (e) {
@@ -142,7 +150,7 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
     }
   };
 
-  // 인증 방식 라우터
+  // 버튼 클릭 핸들러 (설정에 따른 분기)
   const handleCheckInPress = () => {
     const method = userInfo.settings?.checkInMethod || '클릭';
     
@@ -167,7 +175,7 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
     }
   };
 
-  // UI Helpers
+  // UI 아이콘 헬퍼
   const getMethodIcon = () => {
     const method = userInfo.settings?.checkInMethod || '클릭';
     switch (method) {
@@ -193,12 +201,14 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
   return (
     <View style={styles.container}>
       
-      {/* 상단 바 */}
+      {/* 상단 바 (Layout 수정됨) */}
       <View style={[styles.topBar, { paddingTop: insets.top + 20 }]}>
         <View>
           <Text style={styles.topBarGreeting}>안녕하세요,</Text>
           <Text style={styles.topBarName}>{userInfo.name || '회원'} 님!</Text>
         </View>
+        
+        {/* ⚙️ 설정 버튼 (로그아웃 기능 포함) */}
         <TouchableOpacity style={styles.settingsBtn} onPress={() => setShowSettings(true)}>
           <Settings size={24} color="#4b5563" />
         </TouchableOpacity>
@@ -210,10 +220,7 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
           <Text style={styles.subGreeting}>
             오늘도 무소식과 함께{'\n'}활기찬 하루 보내세요!
           </Text>
-          <TouchableOpacity onPress={onBack} style={styles.miniLogoutBtn}>
-            <LogOut size={16} color="#6b7280" />
-            <Text style={styles.miniLogoutText}>로그아웃</Text>
-          </TouchableOpacity>
+          {/* 🛡️ 방어막: 기존 'miniLogoutBtn' 삭제됨 (설정 메뉴로 이동) */}
         </View>
 
         {/* 메인 버튼 */}
@@ -323,34 +330,59 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
 
       <MemberSettingsModal 
         visible={showSettings}
-        onClose={() => setShowSettings(false)}
+        onClose={() => {
+          setShowSettings(false);
+          fetchLatestData(); // 설정 닫을 때 데이터 갱신 (이름 변경 반영 등)
+        }}
         onLogout={() => {
           setShowSettings(false);
           onBack();
         }}
+        isPremium={!!userInfo.is_premium}
       />
 
       <FakeCallModal 
         visible={showFakeCall} 
         onClose={() => setShowFakeCall(false)} 
+        // prop 없이 자체적으로 AsyncStorage 읽음
       />
 
     </View>
   );
 }
 
-// 스타일은 기존과 동일 (간결화를 위해 축약)
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f9fafb' },
-  topBar: { backgroundColor: 'white', paddingHorizontal: 24, paddingBottom: 20, borderBottomWidth: 1, borderBottomColor: '#f3f4f6', elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, zIndex: 10 },
+  // 🔥 [수정됨] 헤더 레이아웃 수정 (가로 배치)
+  topBar: { 
+    backgroundColor: 'white', 
+    paddingHorizontal: 24, 
+    paddingBottom: 20, 
+    borderBottomWidth: 1, 
+    borderBottomColor: '#f3f4f6', 
+    elevation: 4, 
+    zIndex: 10,
+    flexDirection: 'row', // 가로 배치
+    justifyContent: 'space-between', // 양쪽 끝 정렬
+    alignItems: 'center' // 세로 중앙 정렬
+  },
   topBarGreeting: { fontSize: 16, color: '#6b7280', marginBottom: 2 },
   topBarName: { fontSize: 24, fontWeight: 'bold', color: '#111827' },
-  settingsBtn: { padding: 10, backgroundColor: 'white', borderRadius: 20, elevation: 2 },
+  settingsBtn: { 
+    padding: 10, 
+    backgroundColor: 'white', 
+    borderRadius: 20, 
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#f3f4f6'
+  },
   content: { flex: 1, paddingHorizontal: 24, paddingTop: 20 },
-  infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 },
+  infoRow: { 
+    flexDirection: 'row', 
+    marginBottom: 20 
+    // miniLogoutBtn 관련 스타일 제거됨
+  },
   subGreeting: { fontSize: 16, color: '#4b5563', lineHeight: 24, flex: 1 },
-  miniLogoutBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f3f4f6', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, marginLeft: 10 },
-  miniLogoutText: { fontSize: 12, color: '#6b7280', marginLeft: 4, fontWeight: '600' },
   centerArea: { alignItems: 'center', justifyContent: 'center', flex: 1 },
   mainButtonContainer: { width: 200, height: 200, justifyContent: 'center', alignItems: 'center', marginBottom: 24, position: 'relative' },
   mainButton: { width: 180, height: 180, borderRadius: 90, justifyContent: 'center', alignItems: 'center', elevation: 10, shadowColor: '#ef4444', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20, zIndex: 2 },

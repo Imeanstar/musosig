@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { 
   View, Text, StyleSheet, Modal, TouchableOpacity, 
-  TextInput, Alert, ScrollView, Switch 
+  TextInput, Alert, ScrollView, Vibration // 👈 Vibration 추가
 } from 'react-native';
-import { X, LogOut, Bell, User, Check } from 'lucide-react-native';
+import { X, LogOut, Bell, User, Check, Lock, Smartphone } from 'lucide-react-native'; // 👈 Smartphone 아이콘 추가
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
 
@@ -11,30 +11,31 @@ interface MemberSettingsModalProps {
   visible: boolean;
   onClose: () => void;
   onLogout: () => void;
+  isPremium: boolean;
 }
 
-// 🎵 벨소리 목록 (assets에 파일이 실제로 있어야 함)
-// 파일이 없으면 기본 소리 하나만 쓰세요.
-const RINGTONES = [
-  { id: 'ringtone1', name: '기본 벨소리', file: require('../../assets/ringtone.mp3') }, // 기존 파일
-  // { id: 'ringtone2', name: '옛날 전화기', file: require('../../assets/ringtone2.mp3') }, 
-  // { id: 'ringtone3', name: '디지털음', file: require('../../assets/ringtone3.mp3') },
+// 🎵 벨소리 옵션 목록
+// id가 'vibration'이면 소리 없이 진동만 울립니다.
+const RINGTONE_OPTIONS = [
+  { id: 'vibration', name: '📳 진동만', file: null },
+  { id: 'ringtone1', name: '벨소리1', file: require('../../assets/ringtone1.mp3') },
+  { id: 'ringtone2', name: '벨소리2', file: require('../../assets/ringtone2.mp3') },
+  { id: 'ringtone3', name: '벨소리3', file: require('../../assets/ringtone3.mp3') },
 ];
 
 const STORAGE_KEY_NAME = 'FAKE_CALLER_NAME';
 const STORAGE_KEY_RINGTONE = 'FAKE_CALL_RINGTONE_ID';
 
-export function MemberSettingsModal({ visible, onClose, onLogout }: MemberSettingsModalProps) {
+export function MemberSettingsModal({ visible, onClose, onLogout, isPremium }: MemberSettingsModalProps) {
   const [callerName, setCallerName] = useState('우리 아빠 ❤️');
   const [selectedRingtoneId, setSelectedRingtoneId] = useState('ringtone1');
   const [sound, setSound] = useState<Audio.Sound | null>(null);
 
-  // 모달 열릴 때 설정 로드
   useEffect(() => {
     if (visible) {
       loadSettings();
     } else {
-      stopPreview(); // 닫히면 미리듣기 중지
+      stopPreview();
     }
   }, [visible]);
 
@@ -51,8 +52,10 @@ export function MemberSettingsModal({ visible, onClose, onLogout }: MemberSettin
 
   const saveSettings = async () => {
     try {
-      await AsyncStorage.setItem(STORAGE_KEY_NAME, callerName);
-      await AsyncStorage.setItem(STORAGE_KEY_RINGTONE, selectedRingtoneId);
+      if (isPremium) {
+        await AsyncStorage.setItem(STORAGE_KEY_NAME, callerName);
+        await AsyncStorage.setItem(STORAGE_KEY_RINGTONE, selectedRingtoneId);
+      }
       Alert.alert('저장 완료', '설정이 저장되었습니다.');
       onClose();
     } catch (e) {
@@ -60,15 +63,20 @@ export function MemberSettingsModal({ visible, onClose, onLogout }: MemberSettin
     }
   };
 
-  // 🔔 벨소리 미리듣기
+  // 🔔 미리듣기 (진동 or 소리)
   const playPreview = async (ringtoneId: string) => {
-    // 기존 소리 멈춤
-    if (sound) {
-      await sound.unloadAsync();
+    // 기존 동작 멈춤
+    stopPreview();
+
+    // 1. 진동 모드인 경우
+    if (ringtoneId === 'vibration') {
+      Vibration.vibrate([0, 400, 100, 400]); // 징- 징- (미리보기)
+      return;
     }
 
-    const ringtone = RINGTONES.find(r => r.id === ringtoneId);
-    if (!ringtone) return;
+    // 2. 벨소리인 경우
+    const ringtone = RINGTONE_OPTIONS.find(r => r.id === ringtoneId);
+    if (!ringtone || !ringtone.file) return;
 
     try {
       const { sound: newSound } = await Audio.Sound.createAsync(ringtone.file);
@@ -80,6 +88,7 @@ export function MemberSettingsModal({ visible, onClose, onLogout }: MemberSettin
   };
 
   const stopPreview = async () => {
+    Vibration.cancel(); // 진동 멈춤
     if (sound) {
       await sound.stopAsync();
       await sound.unloadAsync();
@@ -87,26 +96,24 @@ export function MemberSettingsModal({ visible, onClose, onLogout }: MemberSettin
     }
   };
 
-  // 로그아웃 방어 로직
   const handleLogout = () => {
     Alert.alert(
       '로그아웃 하시겠습니까?',
       '로그아웃하면 보호자와 연결이 끊길 수 있습니다.',
       [
         { text: '취소', style: 'cancel' },
-        { 
-          text: '로그아웃', 
-          style: 'destructive', 
-          onPress: onLogout 
-        }
+        { text: '로그아웃', style: 'destructive', onPress: onLogout }
       ]
     );
+  };
+
+  const handleLockedPress = () => {
+    Alert.alert("프리미엄 기능 🔒", "보호자가 프리미엄 회원이어야 설정을 변경할 수 있습니다.");
   };
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
       <View style={styles.container}>
-        {/* 헤더 */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>설정</Text>
           <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
@@ -116,55 +123,78 @@ export function MemberSettingsModal({ visible, onClose, onLogout }: MemberSettin
 
         <ScrollView contentContainerStyle={styles.content}>
           
-          {/* 섹션 1: 페이크 콜 설정 */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>📞 긴급 도구 설정</Text>
+          <View style={[styles.section, !isPremium && styles.disabledSection]}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>📞 긴급 도구 설정</Text>
+              {!isPremium && (
+                <View style={styles.premiumBadge}>
+                  <Lock size={12} color="white" strokeWidth={3} />
+                  <Text style={styles.premiumText}>Premium</Text>
+                </View>
+              )}
+            </View>
             
             <View style={styles.inputGroup}>
               <Text style={styles.label}>화면에 표시될 이름</Text>
-              <View style={styles.inputWrapper}>
-                <User size={20} color="#9ca3af" />
+              <TouchableOpacity 
+                activeOpacity={1} 
+                onPress={!isPremium ? handleLockedPress : undefined}
+                style={[styles.inputWrapper, !isPremium && styles.disabledInput]}
+              >
+                <User size={20} color={isPremium ? "#9ca3af" : "#d1d5db"} />
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, !isPremium && { color: '#9ca3af' }]}
                   value={callerName}
                   onChangeText={setCallerName}
                   placeholder="예: 우리 아빠"
+                  editable={isPremium}
                 />
-              </View>
+                {!isPremium && <Lock size={16} color="#d1d5db" />}
+              </TouchableOpacity>
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>벨소리 선택</Text>
+              <Text style={styles.label}>알림 방식 선택</Text>
               <View style={styles.ringtoneList}>
-                {RINGTONES.map((ring) => (
+                {RINGTONE_OPTIONS.map((option) => (
                   <TouchableOpacity 
-                    key={ring.id}
+                    key={option.id}
+                    disabled={!isPremium}
                     style={[
                       styles.ringtoneItem, 
-                      selectedRingtoneId === ring.id && styles.ringtoneItemSelected
+                      selectedRingtoneId === option.id && styles.ringtoneItemSelected,
+                      !isPremium && styles.disabledItem
                     ]}
                     onPress={() => {
-                      setSelectedRingtoneId(ring.id);
-                      playPreview(ring.id);
+                      setSelectedRingtoneId(option.id);
+                      playPreview(option.id);
                     }}
                   >
                     <View style={{flexDirection:'row', alignItems:'center'}}>
-                      <Bell size={18} color={selectedRingtoneId === ring.id ? '#ea580c' : '#6b7280'} />
+                      {/* 아이콘: 진동이면 스마트폰, 벨소리면 종 */}
+                      {option.id === 'vibration' ? (
+                        <Smartphone size={18} color={isPremium && selectedRingtoneId === option.id ? '#ea580c' : '#9ca3af'} />
+                      ) : (
+                        <Bell size={18} color={isPremium && selectedRingtoneId === option.id ? '#ea580c' : '#9ca3af'} />
+                      )}
+                      
                       <Text style={[
                         styles.ringtoneText, 
-                        selectedRingtoneId === ring.id && styles.ringtoneTextSelected
+                        isPremium && selectedRingtoneId === option.id && styles.ringtoneTextSelected,
+                        !isPremium && { color: '#9ca3af' }
                       ]}>
-                        {ring.name}
+                        {option.name}
                       </Text>
                     </View>
-                    {selectedRingtoneId === ring.id && <Check size={18} color="#ea580c" />}
+                    {selectedRingtoneId === option.id && (
+                      <Check size={18} color={isPremium ? "#ea580c" : "#d1d5db"} />
+                    )}
                   </TouchableOpacity>
                 ))}
               </View>
             </View>
           </View>
 
-          {/* 섹션 2: 계정 관리 */}
           <View style={[styles.section, { marginTop: 24 }]}>
             <Text style={styles.sectionTitle}>계정 관리</Text>
             <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
@@ -175,7 +205,6 @@ export function MemberSettingsModal({ visible, onClose, onLogout }: MemberSettin
 
         </ScrollView>
 
-        {/* 하단 저장 버튼 */}
         <View style={styles.footer}>
           <TouchableOpacity style={styles.saveBtn} onPress={saveSettings}>
             <Text style={styles.saveBtnText}>저장하기</Text>
@@ -197,33 +226,25 @@ const styles = StyleSheet.create({
   closeBtn: { position: 'absolute', right: 16 },
   content: { padding: 20 },
   section: { backgroundColor: 'white', borderRadius: 16, padding: 16 },
-  sectionTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 16, color: '#111827' },
+  disabledSection: { backgroundColor: '#f3f4f6', opacity: 0.9 }, 
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
+  sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#111827' },
+  premiumBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#6b7280', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, gap: 4 },
+  premiumText: { color: 'white', fontSize: 10, fontWeight: 'bold' },
   inputGroup: { marginBottom: 20 },
   label: { fontSize: 14, color: '#6b7280', marginBottom: 8 },
-  inputWrapper: { 
-    flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#e5e7eb', 
-    borderRadius: 12, paddingHorizontal: 12, height: 50 
-  },
-  input: { flex: 1, marginLeft: 10, fontSize: 16 },
-  
+  inputWrapper: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, paddingHorizontal: 12, height: 50, backgroundColor: 'white' },
+  disabledInput: { backgroundColor: '#f3f4f6', borderColor: '#e5e7eb' },
+  input: { flex: 1, marginLeft: 10, fontSize: 16, color: '#111827' },
   ringtoneList: { gap: 8 },
-  ringtoneItem: { 
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb' 
-  },
+  ringtoneItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb', backgroundColor: 'white' },
+  disabledItem: { backgroundColor: '#f3f4f6' },
   ringtoneItemSelected: { borderColor: '#ea580c', backgroundColor: '#fff7ed' },
   ringtoneText: { marginLeft: 8, color: '#4b5563' },
   ringtoneTextSelected: { color: '#ea580c', fontWeight: 'bold' },
-
-  logoutBtn: { 
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', 
-    padding: 16, backgroundColor: '#fee2e2', borderRadius: 12 
-  },
+  logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 16, backgroundColor: '#fee2e2', borderRadius: 12 },
   logoutText: { color: '#ef4444', fontWeight: 'bold', marginLeft: 8 },
-
   footer: { padding: 20, backgroundColor: 'white', borderTopWidth: 1, borderTopColor: '#e5e7eb' },
-  saveBtn: { 
-    backgroundColor: '#ea580c', padding: 16, borderRadius: 16, alignItems: 'center' 
-  },
+  saveBtn: { backgroundColor: '#ea580c', padding: 16, borderRadius: 16, alignItems: 'center' },
   saveBtnText: { color: 'white', fontSize: 18, fontWeight: 'bold' }
 });

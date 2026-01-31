@@ -222,32 +222,14 @@ export function MemberPairing({ onPairingComplete, onBack }: MemberPairingProps)
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#fff7ed' },
   container: { flex: 1, position: 'relative' }, 
-  
   backBtn: { marginTop: 40, marginLeft: 20, padding: 10, alignSelf: 'flex-start' },
-  
-  content: { 
-    flex: 1, 
-    justifyContent: 'space-evenly', 
-    alignItems: 'center',
-    paddingBottom: 20 
-  },
-
-  // 타이틀 & 코드박스 영역
+  content: { flex: 1, justifyContent: 'space-evenly', alignItems: 'center', paddingBottom: 20 },
   titleSection: { alignItems: 'center' },
-  title: { 
-    fontSize: 26, fontWeight: 'bold', color: '#ea580c', 
-    textAlign: 'center', lineHeight: 36, marginBottom: 30 
-  },
+  title: { fontSize: 26, fontWeight: 'bold', color: '#ea580c', textAlign: 'center', lineHeight: 36, marginBottom: 30 },
   codeContainer: { flexDirection: 'row', gap: 8 },
-  codeBox: { 
-    width: 45, height: 60, backgroundColor: 'white', 
-    justifyContent: 'center', alignItems: 'center', 
-    borderRadius: 10, borderWidth: 2, borderColor: '#fed7aa' 
-  },
+  codeBox: { width: 45, height: 60, backgroundColor: 'white', justifyContent: 'center', alignItems: 'center', borderRadius: 10, borderWidth: 2, borderColor: '#fed7aa' },
   codeBoxActive: { borderColor: '#ea580c', backgroundColor: '#fff' },
   codeText: { fontSize: 24, fontWeight: 'bold', color: '#333' },
-
-  // 👇 [추가됨] 붙여넣기 버튼 스타일
   pasteButton: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.6)', 
