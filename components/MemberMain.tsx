@@ -136,6 +136,7 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
         });
 
       shake.unsubscribe(); // 흔들기 중단
+      camera.close();
       
       const message = uploadedUrl ? "사진과 함께 안부를 전했습니다! 📸" : "보호자에게 안부를 전했습니다! 👋";
       

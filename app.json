@@ -2,7 +2,7 @@
   "expo": {
     "name": "무소식",
     "slug": "musosik",
-    "version": "2.2.0",
+    "version": "2.3.3",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -24,14 +24,13 @@
       },
       "package": "com.musosik.app",
       "versionCode": 10,
+      "launchMode": "singleTask",
       "intentFilters": [
         {
           "action": "VIEW",
           "data": [
             {
-              "scheme": "musosik",
-              "host": "auth",
-              "paht": "/callback"
+              "scheme": "musosik"
             }
           ],
           "category": [
@@ -50,6 +49,7 @@
         "READ_PHONE_STATE",
         "com.android.vending.BILLING"
       ]
+      
     },
     "web": {
       "favicon": "./assets/favicon.png"

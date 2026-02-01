@@ -7,21 +7,24 @@ export default function AuthCallback() {
   const router = useRouter();
 
   useEffect(() => {
-    // 이 화면은 인증 후 앱으로 돌아왔을 때 아주 잠시 보여집니다.
-    // useUserManagement의 WebBrowser가 이미 토큰을 가로챘을 확률이 높지만,
-    // 만약 여기까지 왔다면 안전하게 메인으로 보냅니다.
+    // 💡 _layout.tsx에서 이미 로그인을 성공시켰습니다.
+    // 여기서는 아주 잠시만 숨을 고르고 메인으로 넘겨줍니다.
+    console.log("🚀 [Callback] 화면 진입. 메인 이동 대기 중...");
+    
     const timer = setTimeout(() => {
-      router.replace('/');
-    }, 500); // 0.5초 뒤 이동
+      // '/' 경로로 이동하면 index.tsx가 로그인 여부를 판단해서
+      // ManagerMain 또는 MemberMain으로 자동으로 보내줍니다.
+      router.replace('/'); 
+    }, 1000); // 1초 뒤 이동 (세션 저장 시간 확보)
 
     return () => clearTimeout(timer);
   }, []);
 
   return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff7ed' }}>
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
       <ActivityIndicator size="large" color="#ea580c" />
-      <Text style={{ marginTop: 20, color: '#666', fontSize: 16 }}>
-        로그인 완료! 잠시만 기다려주세요...
+      <Text style={{ marginTop: 20, color: '#666' }}>
+        로그인 성공! 이동 중입니다...
       </Text>
     </View>
   );

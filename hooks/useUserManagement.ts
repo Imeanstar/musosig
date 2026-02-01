@@ -1,22 +1,17 @@
 /**
  * useUserManagement.ts (Refactored)
- * 
- * 통합 사용자 관리 Hook - Facade Pattern
+ * * 통합 사용자 관리 Hook - Facade Pattern
  * - 인증 (useAuth)
- * - 딥링크 (useDeepLink)
  * - 프로필 (useUserProfile)
- * 
- * 기존 코드와의 하위 호환성을 유지하면서
- * 내부적으로는 책임을 분리한 Hook들을 조합
- * 
- * @pattern Facade
+ * * * [변경] useDeepLink 제거됨 (RootLayout에서 전역 관리)
+ * * @pattern Facade
  * @backward-compatible 기존 컴포넌트에서 수정 없이 사용 가능
  */
 
 import { useState, useEffect } from 'react';
 import { UserInfo } from '../types';
 import { useAuth } from './useAuth';
-import { useDeepLink } from './useDeepLink';
+// ❌ useDeepLink import 제거
 import { useUserProfile } from './useUserProfile';
 
 export const useUserManagement = () => {
@@ -27,16 +22,9 @@ export const useUserManagement = () => {
   // 통합 로딩 상태 (호환성 유지)
   const [isLoading, setIsLoading] = useState(true);
 
-  // 딥링크 처리 (OAuth 콜백용)
-  useDeepLink({
-    onAuthSuccess: async () => {
-      await profile.loadUserProfile();
-    },
-    onAuthError: (error) => {
-      console.error('[UserManagement] OAuth 에러:', error);
-    },
-    enableDebugAlerts: false, // 배포 시에는 false (필요 시 true로 변경)
-  });
+  // ❌ [삭제됨] useDeepLink 호출 부분 제거
+  // 딥링크 처리는 이제 app/_layout.tsx 에서 전역적으로 담당합니다.
+  // 이렇게 해야 중복 호출 및 설정 충돌을 방지할 수 있습니다.
 
   // 초기 로드
   useEffect(() => {

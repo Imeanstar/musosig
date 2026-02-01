@@ -1,157 +1,96 @@
-/**
- * useDeepLink.ts
- * 
- * 딥링크 및 OAuth 리다이렉트 처리 전담 Hook
- * - URL 파싱
- * - 토큰 추출 및 세션 설정
- * - 리스너 등록
- * 
- * @responsibility Deep Link & OAuth Callback
- */
-
 import { useEffect } from 'react';
 import { Alert } from 'react-native';
 import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
 import { supabase } from '../lib/supabase';
 
-interface UseDeepLinkProps {
-  onAuthSuccess?: () => void;
-  onAuthError?: (error: string) => void;
-  enableDebugAlerts?: boolean; // 디버깅용 Alert 활성화 여부
-}
+// 🔥 디버깅을 위해 props나 조건문을 다 무시하고 단순화했습니다.
+export const useDeepLink = ({ onAuthSuccess, onAuthError }: any = {}) => {
 
-export const useDeepLink = ({
-  onAuthSuccess,
-  onAuthError,
-  enableDebugAlerts = false, // 배포 시 false로 변경
-}: UseDeepLinkProps) => {
-
-  /**
-   * URL에서 파라미터 추출 (# 또는 ? 형식 지원)
-   */
   const extractParamsFromUrl = (url: string): Record<string, string> => {
     const params: Record<string, string> = {};
-
-    // 1. 해시(#) 체크 - Supabase OAuth는 주로 # 사용
     const hashSplit = url.split('#');
-    // 2. 쿼리(?) 체크
     const querySplit = url.split('?');
-
-    const queryString = hashSplit.length > 1 
-      ? hashSplit[1] 
-      : (querySplit.length > 1 ? querySplit[1] : null);
+    const queryString = hashSplit.length > 1 ? hashSplit[1] : (querySplit.length > 1 ? querySplit[1] : null);
 
     if (queryString) {
       queryString.split('&').forEach((param) => {
         const [key, value] = param.split('=');
         if (key && value) {
-          params[key] = decodeURIComponent(value);
+          params[key] = decodeURIComponent(value.replace(/\+/g, ' '));
         }
       });
     }
-
     return params;
   };
 
-  /**
-   * 딥링크 핸들러
-   */
   const handleDeepLink = async (event: { url: string }) => {
+    // 🔍 1. 링크 수신 확인
     if (!event.url) return;
+    if (event.url.startsWith('exp://') || event.url.startsWith('http://localhost')) return;
 
-    // 🔇 Expo 개발 서버 URL 무시 (exp://, http://localhost 등)
-    if (event.url.startsWith('exp://') || event.url.startsWith('http://localhost')) {
-      return;
-    }
+    // 🚨 여기서 알림이 안 뜨면 -> 앱 설정(scheme) 문제
+    Alert.alert('1. 링크 감지됨!', event.url);
+    console.log('🔗 [Debug] URL:', event.url);
 
     try {
-      console.log('[DeepLink] 수신:', event.url);
-
       const params = extractParamsFromUrl(event.url);
+
+      // 🔍 2. 파라미터 확인
+      // 내용이 비어있으면 파싱 로직 문제
+      Alert.alert('2. 파라미터 분석', JSON.stringify(params, null, 2));
 
       // 에러 체크
       if (params.error || event.url.includes('error=')) {
-        const errorMsg = params.error_description || params.error || '알 수 없는 오류';
-        console.error('[DeepLink] OAuth 에러:', errorMsg);
-        
-        if (enableDebugAlerts) {
-          Alert.alert('❌ OAuth 에러', errorMsg);
-        }
-        
-        onAuthError?.(errorMsg);
+        Alert.alert('❌ OAuth 에러', params.error_description || '알 수 없는 에러');
+        WebBrowser.dismissBrowser();
         return;
       }
 
-      // 토큰 확인
+      // 토큰 체크
       if (params.access_token && params.refresh_token) {
-        console.log('[DeepLink] 토큰 발견, 세션 설정 중...');
+        Alert.alert('3. 토큰 발견', '세션 설정을 시작합니다.');
 
-        if (enableDebugAlerts) {
-          Alert.alert('✅ 로그인 성공', '세션을 설정합니다...');
-        }
-
-        // Supabase 세션 설정
         const { data, error } = await supabase.auth.setSession({
           access_token: params.access_token,
           refresh_token: params.refresh_token,
         });
 
         if (error) {
-          console.error('[DeepLink] 세션 설정 실패:', error);
-          
-          if (enableDebugAlerts) {
-            Alert.alert('세션 설정 실패', error.message);
-          }
-          
-          onAuthError?.(error.message);
-          return;
+          Alert.alert('❌ 세션 설정 실패', error.message);
+          WebBrowser.dismissBrowser();
+        } else {
+          // 🔍 4. 최종 성공
+          Alert.alert('🎉 4. 로그인 성공!', '메인으로 이동합니다.');
+          WebBrowser.dismissBrowser();
+          if (onAuthSuccess) onAuthSuccess();
         }
-
-        if (data.session) {
-          console.log('[DeepLink] 로그인 성공!');
-          
-          if (enableDebugAlerts) {
-            Alert.alert('✅ 로그인 성공', '유저 정보를 불러옵니다.');
-          }
-          
-          onAuthSuccess?.();
-        }
+      } else {
+        Alert.alert('⚠️ 토큰 없음', 'URL은 왔는데 access_token이 안 보입니다.');
       }
 
     } catch (e: any) {
-      console.error('[DeepLink] 처리 중 오류:', e);
-      
-      if (enableDebugAlerts) {
-        Alert.alert('딥링크 처리 오류', e.message || '오류가 발생했습니다.');
-      }
-      
-      onAuthError?.(e.message);
+      Alert.alert('💥 예외 발생', e.message);
+      WebBrowser.dismissBrowser();
     }
   };
 
-  /**
-   * 리스너 등록 (useEffect)
-   */
   useEffect(() => {
-    // URL 이벤트 리스너
+    // 앱이 켜져있을 때
     const subscription = Linking.addEventListener('url', handleDeepLink);
 
-    // 초기 실행 시 URL 확인 (앱이 링크로 실행된 경우)
+    // 앱이 꺼져있다가 켜질 때 (Cold Start)
     Linking.getInitialURL().then((url) => {
-      if (url && !url.startsWith('exp://') && !url.startsWith('http://localhost')) {
-        console.log('[DeepLink] 초기 URL:', url);
+      if (url && !url.startsWith('exp://')) {
+        Alert.alert('0. 초기 실행 감지', url); 
         handleDeepLink({ url });
       }
     });
 
-    // 클린업
     return () => {
       subscription.remove();
     };
-  }, [onAuthSuccess, onAuthError, enableDebugAlerts]);
+  }, []);
 
-  return {
-    // 필요시 수동 호출용
-    handleDeepLink,
-  };
+  return { handleDeepLink };
 };
