@@ -2,7 +2,7 @@
   "expo": {
     "name": "무소식",
     "slug": "musosik",
-    "version": "2.3.41",
+    "version": "2.3.42",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -23,7 +23,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.musosik.app",
-      "versionCode": 11,
+      "versionCode": 25,
       "launchMode": "singleTask",
       "intentFilters": [
         {
@@ -46,8 +46,7 @@
         "CAMERA",
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
-        "READ_PHONE_STATE",
-        "com.android.vending.BILLING"
+        "READ_PHONE_STATE"
       ]
       
     },
@@ -66,9 +65,9 @@
         "expo-build-properties",
         {
           "android": {
-            "kotlinVersion": "1.9.25",
             "compileSdkVersion": 35,
-            "targetSdkVersion": 35
+            "targetSdkVersion": 35, 
+            "buildToolsVersion": "35.0.0" 
           }
         }
       ],
