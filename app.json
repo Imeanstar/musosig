@@ -23,7 +23,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.musosik.app",
-      "versionCode": 29,
+      "versionCode": 33,
       "intentFilters": [
         {
           "action": "VIEW",
