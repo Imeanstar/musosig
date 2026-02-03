@@ -1,36 +1,76 @@
 // app/_layout.tsx
 import { useEffect } from 'react';
-import { Stack } from "expo-router";
+import { Alert } from 'react-native';
+import { Stack, useRouter } from "expo-router";
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import * as Linking from 'expo-linking'; 
-import { useDeepLink } from '../hooks/useDeepLink';
+// ❌ expo-linking 대신 react-native의 Linking을 씁니다 (더 강력함)
+import { Linking } from 'react-native'; 
+import { supabase } from '../lib/supabase';
 
 export default function RootLayout() {
-  
-  // 1. 기존 훅 실행
-  const { handleDeepLink } = useDeepLink({
-    onAuthSuccess: () => console.log("🎉 [Layout] 딥링크 로그인 성공!"),
-    onAuthError: (msg: string) => console.log("🚨 [Layout] 딥링크 에러:", msg),
-    enableDebugAlerts: true,
-  });
+  const router = useRouter();
 
-  // 2. 강제 URL 확인
   useEffect(() => {
-    const checkInitialUrl = async () => {
-      const url = await Linking.getInitialURL();
-      if (url) {
-        console.log("🔍 [Layout] getInitialURL 감지:", url);
-        handleDeepLink({ url }); 
+    Alert.alert("버전 확인", "지금 코드는 29번 빌드입니다!");
+    // 🕵️‍♂️ URL 처리 함수
+    const handleDeepLink = async (event: { url: string }) => {
+      let url = event.url;
+      if (!url) return;
+
+      console.log("🚀 [Native Linking] 수신:", url);
+      // 🚨 알림: 이걸 보면 성공입니다.
+      Alert.alert("딥링크 감지 성공!", url); 
+
+      // 1. Supabase 토큰 파싱
+      if (url.includes('access_token') && (url.includes('#') || url.includes('?'))) {
+        const fragment = url.split('#')[1] || url.split('?')[1];
+        if (!fragment) return;
+
+        const params: { [key: string]: string } = {};
+        fragment.split('&').forEach(part => {
+          const [key, value] = part.split('=');
+          if (key && value) params[key] = decodeURIComponent(value);
+        });
+
+        if (params.access_token && params.refresh_token) {
+          const { error } = await supabase.auth.setSession({
+            access_token: params.access_token,
+            refresh_token: params.refresh_token,
+          });
+
+          if (!error) {
+            router.replace('/'); 
+            Alert.alert("로그인 성공", "환영합니다!");
+          } else {
+            Alert.alert("세션 에러", error.message);
+          }
+        }
+      } 
+      // 2. 에러 감지
+      else if (url.includes('error=')) {
+        Alert.alert("로그인 실패", url);
       }
     };
-    checkInitialUrl();
+
+    // A. 앱이 켜져있을 때 (Listener)
+    const subscription = Linking.addEventListener('url', handleDeepLink);
+
+    // B. 앱이 꺼져있을 때 (Initial URL)
+    Linking.getInitialURL().then((url) => {
+      if (url) {
+        handleDeepLink({ url: url });
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
   }, []);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="index" />
-        {/* 👇 [수정] options={{ href: null }} 제거함 (Stack에서는 불필요) */}
         <Stack.Screen name="auth/callback" /> 
         <Stack.Screen name="auth/certification" />
       </Stack>

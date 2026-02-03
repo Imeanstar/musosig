@@ -2,7 +2,7 @@
   "expo": {
     "name": "무소식",
     "slug": "musosik",
-    "version": "2.3.42",
+    "version": "2.3.44",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -23,14 +23,15 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.musosik.app",
-      "versionCode": 25,
-      "launchMode": "singleTask",
+      "versionCode": 29,
       "intentFilters": [
         {
           "action": "VIEW",
+          "autoVerify": true,
           "data": [
             {
-              "scheme": "musosik"
+              "scheme": "musosik",
+              "host": "auth"
             }
           ],
           "category": [
@@ -39,6 +40,8 @@
           ]
         }
       ],
+      "launchMode": "singleTask",
+
       "permissions": [
         "RECEIVE_BOOT_COMPLETED",
         "VIBRATE",
@@ -48,7 +51,6 @@
         "ACCESS_COARSE_LOCATION",
         "READ_PHONE_STATE"
       ]
-      
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -66,8 +68,8 @@
         {
           "android": {
             "compileSdkVersion": 35,
-            "targetSdkVersion": 35, 
-            "buildToolsVersion": "35.0.0" 
+            "targetSdkVersion": 35,
+            "buildToolsVersion": "35.0.0"
           }
         }
       ],
