@@ -35,6 +35,7 @@ export default function Index() {
 
   // ✅ [단순화] 딥링크 체크 로직 삭제하고, 그냥 유저 정보만 로드합니다.
   useEffect(() => {
+    Alert.alert("version 43입니다");
     loadUser();
   }, []);
 

@@ -2,7 +2,7 @@
   "expo": {
     "name": "무소식",
     "slug": "musosik",
-    "version": "2.3.44",
+    "version": "2.3.5",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -23,15 +23,14 @@
         "backgroundColor": "#ffffff"
       },
       "package": "com.musosik.app",
-      "versionCode": 34,
+      "versionCode": 43,
       "intentFilters": [
         {
           "action": "VIEW",
           "autoVerify": true,
           "data": [
             {
-              "scheme": "musosik",
-              "host": "auth"
+              "scheme": "musosik"
             }
           ],
           "category": [

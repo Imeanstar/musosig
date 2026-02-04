@@ -7,7 +7,6 @@ import { supabase } from '../../lib/supabase';
 
 export default function AuthCallback() {
   const router = useRouter();
-
   useEffect(() => {
     // 이 화면이 켜졌다는 건, URL을 타고 들어왔다는 뜻입니다.
     const handleUrl = async () => {
