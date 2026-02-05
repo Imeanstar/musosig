@@ -1,15 +1,15 @@
 /**
- * MemberMain.tsx (Refactored & UX Fixed)
- * - 피보호자용 메인 화면
- * - 방어막 적용: 메인 화면에서 '로그아웃' 버튼 제거 (설정 메뉴로 이동됨)
- * - 헤더 레이아웃 수정 완료
+ * MemberMain.tsx (Final Refactored)
+ * - 안부 완료 시 초록색 버튼으로 변경 및 비활성화
+ * - 흔들기/사진 인증 로직 안정화
+ * - UX 개선
  */
 
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Heart, Calculator, Camera, Smartphone, CheckCircle, RefreshCw, Settings } from 'lucide-react-native'; // LogOut 아이콘 제거
+import { Heart, Calculator, Camera, Smartphone, CheckCircle, RefreshCw, Settings } from 'lucide-react-native';
 import { supabase } from '../lib/supabase';
 import { UserInfo } from '../types';
 import { decode } from 'base64-arraybuffer';
@@ -41,6 +41,21 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
   const [showSettings, setShowSettings] = useState(false);
   const [showFakeCall, setShowFakeCall] = useState(false);
 
+  // [수정 전] 단순히 DB 값만 믿음
+  // const isDoneToday = userInfo.is_safe_today || false;
+
+  // ✅ [수정 후] 날짜까지 확인하는 똑똑한 로직
+  const isDoneToday = (() => {
+    if (!userInfo.is_safe_today) return false; // 일단 false면 무조건 안 한 거
+    if (!userInfo.last_seen_at) return false;  // 기록 없어도 안 한 거
+
+    // 마지막 접속 날짜가 '오늘'인지 확인
+    const lastDate = new Date(userInfo.last_seen_at).toDateString();
+    const todayDate = new Date().toDateString();
+
+    return lastDate === todayDate; // 날짜가 같아야 진짜 한 거!
+  })();
+
   // 인증 Hooks
   const math = useMathChallenge();
   const camera = useCameraCapture();
@@ -53,6 +68,17 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
     return () => shake.unsubscribe();
   }, []);
 
+  // 🚨 [수정 포인트] 흔들기 완료 감지 로직 추가 (useEffect)
+  // shake.progress 값이 바뀔 때마다 검사합니다.
+  useEffect(() => {
+    // 1. 게이지가 1.0 (100%) 이상이고
+    // 2. 현재 로딩 중이 아니고 (중복 방지)
+    // 3. 오늘 이미 완료한 상태가 아니라면
+    if (shake.progress >= 1 && !isLoading && !isDoneToday) {
+      completeCheckIn(null, '흔들기'); // 완료 처리 실행!
+    }
+  }, [shake.progress]); // dependency에 progress 필수
+
   // 최신 정보 불러오기
   const fetchLatestData = async () => {
     try {
@@ -64,7 +90,7 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
 
       if (error || !myData) return;
 
-      // 매니저 프리미엄 여부 확인 (내 계정에 없으면 매니저 것 확인)
+      // 매니저 프리미엄 여부 확인
       let isManagerPremium = false;
       if (myData.manager_id) {
         const { data: managerData } = await supabase
@@ -108,20 +134,24 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
 
   // 체크인 완료 처리
   const completeCheckIn = async (imageUri?: string | null, type: string = '클릭') => {
+    // 🚨 이미 로딩 중이면 중복 실행 방지
+    if (isLoading) return;
+
     try {
-      setIsLoading(true);
+      setIsLoading(true); // 로딩 시작
       let uploadedUrl = null;
 
       if (imageUri) {
         uploadedUrl = await uploadImage(imageUri);
       }
 
-      // 1. 유저 정보 업데이트 (마지막 접속 시간)
+      // 1. 유저 정보 업데이트
       await supabase
         .from('users')
         .update({ 
           last_seen_at: new Date().toISOString(),
-          last_proof_url: uploadedUrl, 
+          last_proof_url: uploadedUrl,
+          is_safe_today: true, // ✅ 즉시 상태 반영
           updated_at: new Date().toISOString()
         })
         .eq('id', userInfo.id);
@@ -135,24 +165,32 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
           proof_url: uploadedUrl 
         });
 
-      shake.unsubscribe(); // 흔들기 중단
+      // 3. 정리 및 알림
+      shake.unsubscribe(); 
       camera.close();
       
       const message = uploadedUrl ? "사진과 함께 안부를 전했습니다! 📸" : "보호자에게 안부를 전했습니다! 👋";
       
-      // 안부 전송 후 데이터 갱신
-      Alert.alert("성공", message, [{ text: "확인", onPress: fetchLatestData }]);
+      Alert.alert("성공", message, [{ 
+        text: "확인", 
+        onPress: () => {
+          fetchLatestData(); // 데이터 갱신
+        } 
+      }]);
 
     } catch (e) {
       console.error(e);
       Alert.alert("오류", "전송 중 문제가 발생했습니다.");
     } finally {
-      setIsLoading(false);
+      setIsLoading(false); // 로딩 끝
     }
   };
 
-  // 버튼 클릭 핸들러 (설정에 따른 분기)
+  // 버튼 클릭 핸들러
   const handleCheckInPress = () => {
+    // ✅ 이미 완료했다면 아무것도 하지 않음 (더블 체크)
+    if (isDoneToday) return;
+
     const method = userInfo.settings?.checkInMethod || '클릭';
     
     switch (method) {
@@ -176,8 +214,10 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
     }
   };
 
-  // UI 아이콘 헬퍼
+  // UI 아이콘 헬퍼 (완료 시 체크 아이콘)
   const getMethodIcon = () => {
+    if (isDoneToday) return <CheckCircle size={64} color="#15803d" />; // ✅ 완료 아이콘
+
     const method = userInfo.settings?.checkInMethod || '클릭';
     switch (method) {
       case '수학(EASY)': 
@@ -189,6 +229,8 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
   };
 
   const getMethodLabel = () => {
+    if (isDoneToday) return "오늘 안부 완료!"; // ✅ 완료 텍스트
+
     const method = userInfo.settings?.checkInMethod || '클릭';
     switch (method) {
       case '수학(EASY)': return "쉬운 계산 풀기";
@@ -202,14 +244,12 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
   return (
     <View style={styles.container}>
       
-      {/* 상단 바 (Layout 수정됨) */}
+      {/* 상단 바 */}
       <View style={[styles.topBar, { paddingTop: insets.top + 20 }]}>
         <View>
           <Text style={styles.topBarGreeting}>안녕하세요,</Text>
           <Text style={styles.topBarName}>{userInfo.name || '회원'} 님!</Text>
         </View>
-        
-        {/* ⚙️ 설정 버튼 (로그아웃 기능 포함) */}
         <TouchableOpacity style={styles.settingsBtn} onPress={() => setShowSettings(true)}>
           <Settings size={24} color="#4b5563" />
         </TouchableOpacity>
@@ -219,9 +259,10 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
         
         <View style={styles.infoRow}>
           <Text style={styles.subGreeting}>
-            오늘도 무소식과 함께{'\n'}활기찬 하루 보내세요!
+            {isDoneToday 
+              ? "오늘 할 일을 모두 마치셨네요!\n편안한 하루 되세요 🌿" 
+              : "오늘도 무소식과 함께\n활기찬 하루 보내세요!"}
           </Text>
-          {/* 🛡️ 방어막: 기존 'miniLogoutBtn' 삭제됨 (설정 메뉴로 이동) */}
         </View>
 
         {/* 메인 버튼 */}
@@ -230,31 +271,42 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
             style={styles.mainButtonContainer} 
             onPress={handleCheckInPress}
             activeOpacity={0.8}
+            disabled={isDoneToday || isLoading} // ✅ 완료 시 비활성화
           >
+            {/* ✅ 완료 시: 초록색 그라디언트 / 미완료 시: 빨간색 그라디언트 */}
             <LinearGradient
-              colors={['#ef4444', '#f43f5e']} 
-              style={styles.mainButton}
+              colors={isDoneToday ? ['#dcfce7', '#bbf7d0'] : ['#ef4444', '#f43f5e']}
+              style={[
+                styles.mainButton,
+                isDoneToday && { borderWidth: 4, borderColor: '#86efac', elevation: 0 } // 완료 시 납작하게
+              ]}
             >
               {isLoading ? <ActivityIndicator color="white" size="large" /> : getMethodIcon()}
             </LinearGradient>
-            <View style={styles.pulseRing} /> 
+            
+            {/* 펄스 효과는 미완료일 때만 */}
+            {!isDoneToday && <View style={styles.pulseRing} />} 
           </TouchableOpacity>
-          <Text style={styles.actionLabel}>{getMethodLabel()}</Text>
-          <Text style={styles.actionSubLabel}>버튼을 눌러 안부를 전해주세요</Text>
+          
+          <Text style={[styles.actionLabel, isDoneToday && { color: '#15803d' }]}>
+            {getMethodLabel()}
+          </Text>
+          <Text style={styles.actionSubLabel}>
+            {isDoneToday ? "내일 또 만나요!" : "버튼을 눌러 안부를 전해주세요"}
+          </Text>
         </View>
 
         {/* 하단 카드 */}
         <View style={[styles.footer, { paddingBottom: insets.bottom + 20 }]}>
           <View style={styles.bottomRow}>
             
-            {/* 마지막 안부 */}
             <TouchableOpacity style={styles.halfCard} onPress={fetchLatestData} activeOpacity={0.7}>
               <View style={styles.cardHeader}>
                 <RefreshCw size={14} color="#9ca3af" />
                 <Text style={styles.cardLabel}>마지막 안부</Text>
               </View>
               <View style={styles.cardBody}>
-                <CheckCircle size={24} color="#10b981" style={{ marginBottom: 8 }} />
+                <CheckCircle size={24} color={isDoneToday ? "#10b981" : "#9ca3af"} style={{ marginBottom: 8 }} />
                 <Text style={styles.cardValueText} numberOfLines={2}>
                   {userInfo.last_seen_at 
                     ? new Date(userInfo.last_seen_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
@@ -268,7 +320,6 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
               </View>
             </TouchableOpacity>
 
-            {/* 페이크 콜 */}
             <TouchableOpacity 
               style={[styles.halfCard, !userInfo.is_premium && styles.disabledCard]} 
               onPress={() => {
@@ -327,13 +378,15 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
         visible={shake.isVisible}
         progress={shake.progress}
         onCancel={shake.close}
+        // ✅ 흔들기 완료 시 자동 실행되도록 ShakeModal 내부 로직이나 Hook에서 호출 필요
+        // (여기서는 Hook의 onComplete prop 등을 활용하거나, useEffect 감지 방식 사용 권장)
       />
 
       <MemberSettingsModal 
         visible={showSettings}
         onClose={() => {
           setShowSettings(false);
-          fetchLatestData(); // 설정 닫을 때 데이터 갱신 (이름 변경 반영 등)
+          fetchLatestData();
         }}
         onLogout={() => {
           setShowSettings(false);
@@ -345,7 +398,6 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
       <FakeCallModal 
         visible={showFakeCall} 
         onClose={() => setShowFakeCall(false)} 
-        // prop 없이 자체적으로 AsyncStorage 읽음
       />
 
     </View>
@@ -354,7 +406,6 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f9fafb' },
-  // 🔥 [수정됨] 헤더 레이아웃 수정 (가로 배치)
   topBar: { 
     backgroundColor: 'white', 
     paddingHorizontal: 24, 
@@ -363,9 +414,9 @@ const styles = StyleSheet.create({
     borderBottomColor: '#f3f4f6', 
     elevation: 4, 
     zIndex: 10,
-    flexDirection: 'row', // 가로 배치
-    justifyContent: 'space-between', // 양쪽 끝 정렬
-    alignItems: 'center' // 세로 중앙 정렬
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center' 
   },
   topBarGreeting: { fontSize: 16, color: '#6b7280', marginBottom: 2 },
   topBarName: { fontSize: 24, fontWeight: 'bold', color: '#111827' },
@@ -378,11 +429,7 @@ const styles = StyleSheet.create({
     borderColor: '#f3f4f6'
   },
   content: { flex: 1, paddingHorizontal: 24, paddingTop: 20 },
-  infoRow: { 
-    flexDirection: 'row', 
-    marginBottom: 20 
-    // miniLogoutBtn 관련 스타일 제거됨
-  },
+  infoRow: { flexDirection: 'row', marginBottom: 20 },
   subGreeting: { fontSize: 16, color: '#4b5563', lineHeight: 24, flex: 1 },
   centerArea: { alignItems: 'center', justifyContent: 'center', flex: 1 },
   mainButtonContainer: { width: 200, height: 200, justifyContent: 'center', alignItems: 'center', marginBottom: 24, position: 'relative' },

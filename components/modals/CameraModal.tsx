@@ -1,10 +1,11 @@
 /**
  * CameraModal.tsx
  * - 카메라 촬영 및 미리보기 모달
+ * - 🚨 [수정됨] isLoading prop 추가 및 전송 버튼 로딩 처리 적용
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
 import { X, RotateCcw, Send } from 'lucide-react-native';
 import { CameraView } from 'expo-camera';
 
@@ -16,6 +17,9 @@ interface CameraModalProps {
   onRetake: () => void;
   onSend: () => void;
   onClose: () => void;
+  
+  // 🚨 [추가] 로딩 상태를 받기 위한 prop (선택값, 기본 false)
+  isLoading?: boolean; 
 }
 
 export function CameraModal({
@@ -25,7 +29,8 @@ export function CameraModal({
   onTakePicture,
   onRetake,
   onSend,
-  onClose
+  onClose,
+  isLoading = false // 🚨 [추가] 기본값 false 설정
 }: CameraModalProps) {
   
   return (
@@ -52,14 +57,37 @@ export function CameraModal({
             <Image source={{ uri: photoUri }} style={{ flex: 1 }} resizeMode="contain" />
             <View style={styles.previewOverlay}>
               <Text style={styles.previewTitle}>이 사진으로 보낼까요?</Text>
+              
               <View style={styles.btnRow}>
-                <TouchableOpacity style={styles.retakeBtn} onPress={onRetake}>
+                {/* 재촬영 버튼 (로딩 중엔 클릭 막기) */}
+                <TouchableOpacity 
+                  style={[styles.retakeBtn, isLoading && { opacity: 0.5 }]} 
+                  onPress={onRetake}
+                  disabled={isLoading}
+                >
                   <RotateCcw size={20} color="#4b5563" />
                   <Text style={styles.retakeText}>재촬영</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.sendBtn} onPress={onSend}>
-                  <Send size={20} color="white" />
-                  <Text style={styles.sendText}>전송하기</Text>
+
+                {/* 🚨 [수정] 전송 버튼: 로딩 중이면 회색 배경 + 스피너 표시 */}
+                <TouchableOpacity 
+                  style={[
+                    styles.sendBtn, 
+                    isLoading && { backgroundColor: '#9ca3af' } // 로딩 시 회색으로 변경
+                  ]} 
+                  onPress={onSend}
+                  disabled={isLoading} // 로딩 시 터치 차단
+                >
+                  {isLoading ? (
+                    // 로딩 중일 때
+                    <ActivityIndicator color="white" />
+                  ) : (
+                    // 평소 상태일 때
+                    <>
+                      <Send size={20} color="white" />
+                      <Text style={styles.sendText}>전송하기</Text>
+                    </>
+                  )}
                 </TouchableOpacity>
               </View>
             </View>

@@ -25,6 +25,7 @@ export interface Profile {
   // Member 전용 필드 (Manager는 null)
   pairing_code?: string | null;       // 6자리 페어링 코드
   manager_id?: string | null;         // 속한 Manager ID
+  is_safe_today?: boolean;
   
   // 관계 메타데이터
   nickname?: string | null;           // 매니저가 멤버에게 붙인 별명

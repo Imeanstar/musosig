@@ -1,14 +1,3 @@
-/**
- * ManagerMain.tsx (Refactored)
- * 
- * Manager 메인 화면 - 리팩토링 버전
- * 
- * Before: 805줄, 12개 상태, 8가지 책임
- * After: ~150줄, 3개 상태, 1가지 책임 (라우팅)
- * 
- * @refactored 2026.01
- */
-
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, 
   ScrollView, RefreshControl, Alert, Dimensions, Image, Modal } from 'react-native';
@@ -20,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { supabase } from '@/lib/supabase';
 import * as Clipboard from 'expo-clipboard';
+import { RelinkCodeModal } from './manager/RelinkCodeModal';
 
 // Hooks
 import { useUserManagement } from '../hooks/useUserManagement';
@@ -74,6 +64,8 @@ export function ManagerMain({ onBack, userInfo }: ManagerMainProps) {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [currentUser, setCurrentUser] = useState<UserInfo>(userInfo);
+  const [relinkModalVisible, setRelinkModalVisible] = useState(false);
+  const [currentRelinkCode, setCurrentRelinkCode] = useState<string | null>(null);
 
   // 선택된 멤버의 캘린더 데이터
   const { currentDate, checkInLogs, changeMonth, getDaysInMonth } = useCalendar(
@@ -113,15 +105,8 @@ export function ManagerMain({ onBack, userInfo }: ManagerMainProps) {
     const code = await generateRelinkCode(selectedMember.id);
     
     if (code) {
-      // 2. 📋 클립보드에 자동 복사 (핵심!)
-      await Clipboard.setStringAsync(code);
-
-      // 3. 안내 메시지
-      Alert.alert(
-        '재연결 코드 발급', 
-        `코드: ${code}\n\n✅ 클립보드에 복사되었습니다!`,
-        [{ text: '확인' }]
-      );
+      setCurrentRelinkCode(code);
+      setRelinkModalVisible(true);
     }
   };
 
@@ -467,6 +452,13 @@ export function ManagerMain({ onBack, userInfo }: ManagerMainProps) {
         visible={showPremiumModal}
         onClose={() => setShowPremiumModal(false)}
       />
+
+      <RelinkCodeModal
+         visible={relinkModalVisible}
+         code={currentRelinkCode}
+         memberName={selectedMember?.nickname || selectedMember?.name || '멤버'}
+         onClose={() => setRelinkModalVisible(false)}
+       />   
     </View>
   );
 }

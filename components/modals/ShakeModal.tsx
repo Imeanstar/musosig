@@ -1,6 +1,6 @@
 /**
  * ShakeModal.tsx
- * - 휴대폰 흔들기 진행 모달
+ * - 0.0 ~ 1.0 사이의 progress 값을 받아서 %로 변환하여 표시
  */
 
 import React from 'react';
@@ -9,12 +9,15 @@ import { Smartphone } from 'lucide-react-native';
 
 interface ShakeModalProps {
   visible: boolean;
-  progress: number;
+  progress: number; // 0.0 ~ 1.0 사이의 소수점 값
   onCancel: () => void;
 }
 
 export function ShakeModal({ visible, progress, onCancel }: ShakeModalProps) {
   
+  // 🚨 [수정 포인트] 0.1 -> 10% 로 변환하고, 최대 100을 넘지 않게 막음
+  const percentage = Math.min(Math.floor(progress * 100), 100);
+
   return (
     <Modal visible={visible} transparent animationType="fade">
       <View style={styles.overlay}>
@@ -25,9 +28,12 @@ export function ShakeModal({ visible, progress, onCancel }: ShakeModalProps) {
           <Smartphone size={80} color="#f43f5e" style={{ marginBottom: 20 }} />
           
           <View style={styles.progressBg}>
-            <View style={[styles.progressFill, { width: `${progress}%` }]} />
+            {/* 🚨 width에 percentage 적용 */}
+            <View style={[styles.progressFill, { width: `${percentage}%` }]} />
           </View>
-          <Text style={styles.progressText}>{progress}% 완료</Text>
+          
+          {/* 🚨 텍스트도 percentage로 표시 */}
+          <Text style={styles.progressText}>{percentage}% 완료</Text>
 
           <TouchableOpacity style={styles.cancelBtn} onPress={onCancel}>
             <Text style={styles.cancelText}>취소</Text>
