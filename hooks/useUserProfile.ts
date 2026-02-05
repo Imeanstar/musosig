@@ -1,7 +1,7 @@
 /**
- * useUserProfile.ts (수정버전)
- * * 문제 해결: .single() 대신 .limit(1).maybeSingle()을 사용하여
- * 중복 데이터 에러("Cannot coerce...")를 강제로 무시하고 진행합니다.
+ * useUserProfile.ts (최종 수정버전)
+ * * 문제 해결 1: .limit(1).maybeSingle()로 중복 데이터 조회 에러 방지
+ * * 문제 해결 2: updateSocialUserInfo에서 role을 'manager'로 강제 설정하여 권한 문제 해결
  */
 
 import { useState } from 'react';
@@ -50,7 +50,7 @@ export const useUserProfile = (): UseUserProfileReturn => {
         return null;
       }
 
-      // 2. DB에서 프로필 조회
+      // 2. DB에서 프로필 조회 (중복 방지 로직 적용)
       const { data: dbUser, error } = await supabase
         .from('users')
         .select('*')
@@ -74,8 +74,7 @@ export const useUserProfile = (): UseUserProfileReturn => {
         return null;
       }
 
-      // 🔥 [Step 3. 추가됨] 프리미엄 만료일 체크 로직
-      // DB에 is_premium이 true인데, 날짜가 지났으면 -> false로 강제 변경
+      // 3. 프리미엄 만료일 체크 로직
       if (dbUser.is_premium && dbUser.premium_expiry_at) {
         const now = new Date();
         const expiryDate = new Date(dbUser.premium_expiry_at);
@@ -83,13 +82,11 @@ export const useUserProfile = (): UseUserProfileReturn => {
         if (now > expiryDate) {
           console.log('[Profile] 🚫 프리미엄 기간 만료됨! 등급을 내립니다.');
           
-          // 1. DB 업데이트 (await로 확실하게 처리)
           await supabase
             .from('users')
             .update({ is_premium: false })
             .eq('id', session.user.id);
             
-          // 2. 현재 메모리에 있는 데이터도 즉시 수정 (그래야 아래 Step 4에서 적용됨)
           dbUser.is_premium = false; 
         }
       }
@@ -98,7 +95,7 @@ export const useUserProfile = (): UseUserProfileReturn => {
       const user: UserInfo = {
         id: dbUser.id,
         role: dbUser.role,
-        name: dbUser.name,
+        name: dbUser.name, // DB 컬럼이 name인 경우
         phone: dbUser.phone,
         pairing_code: dbUser.pairing_code,
         manager_id: dbUser.manager_id,
@@ -113,12 +110,11 @@ export const useUserProfile = (): UseUserProfileReturn => {
         last_seen_at: dbUser.last_seen_at,
         settings: dbUser.settings,
         
-        // 🔥 [추가] 날짜 정보도 state에 포함시켜야 UI에서 확인 가능
         premium_started_at: dbUser.premium_started_at,
         premium_expiry_at: dbUser.premium_expiry_at,
       };
 
-      // 5. 로컬 스토리지 저장
+      // 5. 로컬 스토리지 저장 및 상태 업데이트
       await saveUserToStorage(user);
       setUserInfo(user);
 
@@ -154,18 +150,16 @@ export const useUserProfile = (): UseUserProfileReturn => {
 
         if (!error) {
           await AsyncStorage.setItem(STORAGE_KEYS.PUSH_TOKEN, newToken);
-        } else {
-            // 조용히 실패
         }
       }
     } catch (error) {
-        // 조용히 실패
+      // 조용히 실패
     }
   };
 
   /**
    * 소셜 유저 추가 정보 업데이트 (전화번호 등)
-   * 🔥 수정: update -> upsert로 변경하여 삭제된 유저 데이터 자동 복구
+   * 🔥 [핵심 수정] role: 'manager'로 강제 설정하여 권한 문제 해결
    */
   const updateSocialUserInfo = async (
     userId: string, 
@@ -178,35 +172,52 @@ export const useUserProfile = (): UseUserProfileReturn => {
       setIsProfileLoading(true);
       const cleanPhone = phone.replace(/-/g, '');
 
-      // 1. 현재 로그인된 이메일 가져오기 (데이터 복구 시 필요)
+      // 1. 현재 로그인된 이메일 가져오기
       const { data: { session } } = await supabase.auth.getSession();
       const userEmail = session?.user?.email || '';
 
-      // 2. Upsert 실행 (없으면 생성, 있으면 수정)
+      // ✅ [추가됨] 2. DB에 저장된 내 기존 역할(Role) 확인하기
+      // (이미 member로 되어있는데 manager로 덮어쓰는 사고 방지)
+      const { data: existingUser } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', userId)
+        .single();
+
+      // ✅ [핵심 로직]
+      // 기존 역할이 있으면 그대로 유지(existingUser.role)
+      // 없으면(신규가입) 'manager' 부여
+      const finalRole = existingUser?.role ? existingUser.role : 'manager';
+
+      console.log(`[Profile] 역할 저장 예정: ${finalRole} (기존: ${existingUser?.role})`);
+
+      // 3. Upsert 실행
       const { error } = await supabase
         .from('users')
         .upsert({
-          id: userId,           // 필수: 이 ID로 찾음
+          id: userId,
           phone: cleanPhone,
           name: name,
-          email: userEmail,     // 필수: 혹시 새로 만들 때 필요
-          role: 'member',       // 필수: 기본 역할
+          email: userEmail,
+          
+          // 🚨 [수정됨] 무조건 'manager'가 아니라, 결정된 역할(finalRole)을 넣습니다.
+          role: finalRole, 
+          
           updated_at: new Date().toISOString(),
         })
-        .select(); // 업데이트 후 결과 반환 보장
+        .select();
 
       if (error) {
-        // 전화번호 중복 체크
         if (error.code === '23505') {
           throw new Error('이미 가입된 전화번호입니다.\n(기존 계정이 존재합니다)');
         }
         throw error;
       }
 
-      // 3. 프로필 재로드 (이제 데이터가 생겼으니 100% 읽힘)
+      // 4. 프로필 재로드
       await loadUserProfile();
       
-      console.log('[Profile] 유저 정보 저장(복구) 완료 ✨');
+      console.log('[Profile] 유저 정보 저장 완료 ✨');
       return true;
 
     } catch (e: any) {
@@ -219,7 +230,7 @@ export const useUserProfile = (): UseUserProfileReturn => {
   };
 
   /**
-   * 프리미엄 상태 토글 (개발/테스트용 + 날짜 업데이트 추가)
+   * 프리미엄 상태 토글
    */
   const togglePremium = async (): Promise<void> => {
     if (!userInfo) return;
@@ -228,24 +239,18 @@ export const useUserProfile = (): UseUserProfileReturn => {
       const newStatus = !userInfo.is_premium;
       const now = new Date();
       
-      // 업데이트할 데이터 객체 만들기
       const updates: any = {
         is_premium: newStatus,
         updated_at: now.toISOString(),
       };
 
-      // 🔥 [핵심] 프리미엄을 '켤 때'만 시작일과 만료일을 갱신합니다.
       if (newStatus === true) {
         updates.premium_started_at = now.toISOString();
-        
-        // (선택) 만료일을 30일 뒤로 설정하고 싶다면?
         const expiryDate = new Date(now);
-        expiryDate.setDate(now.getDate() + 31); // 30일 추가
+        expiryDate.setDate(now.getDate() + 31);
         updates.premium_expiry_at = expiryDate.toISOString();
       } 
-      // 끄는 경우(false)에는 날짜를 NULL로 할지, 기록으로 남길지 선택 (보통 그냥 둠)
 
-      // DB 업데이트
       const { error } = await supabase
         .from('users')
         .update(updates)
@@ -253,16 +258,14 @@ export const useUserProfile = (): UseUserProfileReturn => {
 
       if (error) throw error;
 
-      // 로컬 상태 즉시 반영
       await savePremiumStatus(newStatus);
       setUserInfo({ 
         ...userInfo, 
         is_premium: newStatus,
-        // UI에 바로 반영되게 날짜도 로컬 state에 업데이트
         premium_started_at: newStatus ? now.toISOString() : userInfo.premium_started_at 
       });
 
-      console.log(`[Profile] 프리미엄 ${newStatus ? 'ON' : 'OFF'} (날짜 갱신됨)`);
+      console.log(`[Profile] 프리미엄 ${newStatus ? 'ON' : 'OFF'}`);
 
     } catch (e) {
       console.error('[Profile] 프리미엄 상태 변경 실패:', e);

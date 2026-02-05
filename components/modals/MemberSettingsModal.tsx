@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { 
   View, Text, StyleSheet, Modal, TouchableOpacity, 
-  TextInput, Alert, ScrollView, Vibration // 👈 Vibration 추가
+  TextInput, Alert, ScrollView, Vibration 
 } from 'react-native';
-import { X, LogOut, Bell, User, Check, Lock, Smartphone } from 'lucide-react-native'; // 👈 Smartphone 아이콘 추가
+import { X, LogOut, Bell, User, Check, Lock, Smartphone } from 'lucide-react-native'; 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
 
@@ -15,7 +15,6 @@ interface MemberSettingsModalProps {
 }
 
 // 🎵 벨소리 옵션 목록
-// id가 'vibration'이면 소리 없이 진동만 울립니다.
 const RINGTONE_OPTIONS = [
   { id: 'vibration', name: '📳 진동만', file: null },
   { id: 'ringtone1', name: '벨소리1', file: require('../../assets/ringtone1.mp3') },
@@ -65,16 +64,13 @@ export function MemberSettingsModal({ visible, onClose, onLogout, isPremium }: M
 
   // 🔔 미리듣기 (진동 or 소리)
   const playPreview = async (ringtoneId: string) => {
-    // 기존 동작 멈춤
     stopPreview();
 
-    // 1. 진동 모드인 경우
     if (ringtoneId === 'vibration') {
-      Vibration.vibrate([0, 400, 100, 400]); // 징- 징- (미리보기)
+      Vibration.vibrate([0, 400, 100, 400]); 
       return;
     }
 
-    // 2. 벨소리인 경우
     const ringtone = RINGTONE_OPTIONS.find(r => r.id === ringtoneId);
     if (!ringtone || !ringtone.file) return;
 
@@ -88,7 +84,7 @@ export function MemberSettingsModal({ visible, onClose, onLogout, isPremium }: M
   };
 
   const stopPreview = async () => {
-    Vibration.cancel(); // 진동 멈춤
+    Vibration.cancel(); 
     if (sound) {
       await sound.stopAsync();
       await sound.unloadAsync();
@@ -148,8 +144,18 @@ export function MemberSettingsModal({ visible, onClose, onLogout, isPremium }: M
                   onChangeText={setCallerName}
                   placeholder="예: 우리 아빠"
                   editable={isPremium}
+                  maxLength={15}
                 />
-                {!isPremium && <Lock size={16} color="#d1d5db" />}
+                
+                {/* 👇 [수정됨] 프리미엄이면 카운터 표시, 아니면 자물쇠 표시 */}
+                {isPremium ? (
+                  <Text style={styles.counterText}>
+                    {callerName.length}/15
+                  </Text>
+                ) : (
+                  <Lock size={16} color="#d1d5db" />
+                )}
+
               </TouchableOpacity>
             </View>
 
@@ -171,7 +177,6 @@ export function MemberSettingsModal({ visible, onClose, onLogout, isPremium }: M
                     }}
                   >
                     <View style={{flexDirection:'row', alignItems:'center'}}>
-                      {/* 아이콘: 진동이면 스마트폰, 벨소리면 종 */}
                       {option.id === 'vibration' ? (
                         <Smartphone size={18} color={isPremium && selectedRingtoneId === option.id ? '#ea580c' : '#9ca3af'} />
                       ) : (
@@ -236,6 +241,10 @@ const styles = StyleSheet.create({
   inputWrapper: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 12, paddingHorizontal: 12, height: 50, backgroundColor: 'white' },
   disabledInput: { backgroundColor: '#f3f4f6', borderColor: '#e5e7eb' },
   input: { flex: 1, marginLeft: 10, fontSize: 16, color: '#111827' },
+  
+  // 👇 [추가됨] 카운터 텍스트 스타일
+  counterText: { fontSize: 12, color: '#9ca3af', marginLeft: 8 },
+
   ringtoneList: { gap: 8 },
   ringtoneItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb', backgroundColor: 'white' },
   disabledItem: { backgroundColor: '#f3f4f6' },

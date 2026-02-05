@@ -115,7 +115,10 @@ export function MemberPairing({ onPairingComplete, onBack }: MemberPairingProps)
 
     } catch (e: any) {
       console.error("Pairing Error:", e);
-      Alert.alert('오류', '연결 중 문제가 발생했습니다.');
+      Alert.alert(
+        '오류 상세 내용', 
+        e.message || JSON.stringify(e) || '알 수 없는 오류가 발생했습니다.'
+      );
     } finally {
       setIsLoading(false);
     }
