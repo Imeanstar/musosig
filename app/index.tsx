@@ -108,8 +108,8 @@ export default function Index() {
                  <Ionicons name="shield-checkmark" size={32} color="#3b82f6" />
               </View>
               <View style={styles.textGroup}>
-                <Text style={styles.roleTitle}>보호자 (자녀)</Text>
-                <Text style={styles.roleDesc}>부모님의 안부를 확인하고 싶어요</Text>
+                <Text style={styles.roleTitle}>안부 묻기</Text>
+                <Text style={styles.roleDesc}>잘 지내는지 궁금해요</Text>
               </View>
               <Ionicons name="chevron-forward" size={24} color="#cbd5e1" />
             </TouchableOpacity>
@@ -123,8 +123,8 @@ export default function Index() {
                  <Ionicons name="heart" size={32} color="#ea580c" />
               </View>
               <View style={styles.textGroup}>
-                <Text style={styles.roleTitle}>부모님 (어르신)</Text>
-                <Text style={styles.roleDesc}>자녀와 연결하고 싶어요</Text>
+                <Text style={styles.roleTitle}>안부 답하기</Text>
+                <Text style={styles.roleDesc}>잘 지낸다고 알릴래요</Text>
               </View>
               <Ionicons name="chevron-forward" size={24} color="#cbd5e1" />
             </TouchableOpacity>

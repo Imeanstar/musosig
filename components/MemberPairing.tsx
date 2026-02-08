@@ -1,53 +1,94 @@
+/**
+ * MemberPairing.tsx
+ * - [수정됨] Alert 대신 CustomAlertModal 사용
+ * - [수정됨] 매니저/멤버 연결 로직 안정화
+ */
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Dimensions, SafeAreaView } from 'react-native';
-// 👇 1. 필요한 아이콘과 라이브러리 추가
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Dimensions, SafeAreaView } from 'react-native'; // Alert 제거
 import { ChevronLeft, Delete, Check, ClipboardPaste } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard'; 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { useUserManagement } from '../hooks/useUserManagement';
 
+// 🚨 [추가] 커스텀 모달 import (경로 확인해주세요!)
+import CustomAlertModal from './modals/CustomAlertModal';
+
 interface MemberPairingProps {
   onPairingComplete: (managerName: string) => void;
   onBack: () => void;
 }
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
 export function MemberPairing({ onPairingComplete, onBack }: MemberPairingProps) {
   const { userInfo } = useUserManagement();
   const [code, setCode] = useState<string[]>(['', '', '', '', '', '']);
   const [isLoading, setIsLoading] = useState(false);
   
-  // 👇 2. 안전 영역 높이 가져오기
-  const insets = useSafeAreaInsets();
+  // 🚨 [추가] 모달 상태 관리
+  const [modalConfig, setModalConfig] = useState({
+    visible: false,
+    title: '',
+    message: '',
+    type: 'default' as 'default' | 'danger',
+    onConfirm: () => {},
+    showCancel: false, // 취소 버튼 보일지 여부
+    disableBackgroundClose: false
+  });
 
+  const insets = useSafeAreaInsets();
   const isComplete = code.every(c => c !== '');
 
-  // 📋 [추가됨] 붙여넣기 기능
+  // 모달 닫기 헬퍼
+  const closeModal = () => {
+    setModalConfig(prev => ({ ...prev, visible: false }));
+  };
+
+  // 모달 띄우기 헬퍼
+  // 2. [수정] showModal 함수 업그레이드
+  const showModal = (
+    title: string, 
+    message: string, 
+    type: 'default' | 'danger' = 'default', 
+    onConfirm: () => void = () => {}, 
+    showCancel = false,
+    disableBackgroundClose = false // 👈 인자 추가 (기본값 false)
+  ) => {
+    setModalConfig({
+      visible: true,
+      title,
+      message,
+      type,
+      onConfirm: () => {
+        closeModal();
+        onConfirm();
+      },
+      showCancel,
+      disableBackgroundClose // 👈 설정에 저장
+    });
+  };
+
+  // 📋 붙여넣기 기능
   const handlePaste = async () => {
     const text = await Clipboard.getStringAsync();
-    // 숫자만 남기고 제거
     const numbersOnly = text.replace(/[^0-9]/g, '');
 
     if (numbersOnly.length === 0) {
-      Alert.alert("알림", "복사된 내용에 숫자가 없습니다.");
+      showModal("알림", "복사된 내용에 숫자가 없습니다.");
       return;
     }
 
-    // 6자리로 자르고 배열로 변환
     const newCodeArr = numbersOnly.slice(0, 6).split('');
-    
-    // 6자리가 안 되면 나머지는 빈칸으로 채우기
     while (newCodeArr.length < 6) {
       newCodeArr.push('');
     }
 
     setCode(newCodeArr);
-    Alert.alert("성공", "코드를 붙여넣었습니다! 😊");
+    showModal("성공", "코드를 붙여넣었습니다! 😊");
   };
 
-  // 기존 검증 로직 유지 (이름 업데이트 추가됨 ✨)
+  // 연결 및 검증 로직
   const verifyAndLink = async () => {
     const fullCode = code.join('');
     if (!isComplete) return;
@@ -70,8 +111,8 @@ export function MemberPairing({ onPairingComplete, onBack }: MemberPairingProps)
         .maybeSingle();
 
       if (searchError || !targetUser) {
-        Alert.alert('연결 실패', '유효하지 않은 코드입니다.');
         setIsLoading(false);
+        showModal('연결 실패', '유효하지 않은 코드입니다.', 'danger');
         return;
       }
 
@@ -80,23 +121,26 @@ export function MemberPairing({ onPairingComplete, onBack }: MemberPairingProps)
       // [Case A] 매니저와 처음 연결하는 경우 (신규 가입)
       if (targetUser.role === 'manager') {
         
-        // 🔥 [수정됨] 매니저가 설정한 애칭을 내 이름으로 가져오기!
         const { error: updateError } = await supabase.from('users').update({ 
             role: 'member',
             manager_id: targetUser.id,
-            
-            // 👇 여기가 핵심입니다!
             name: targetUser.pending_member_nickname || '가족', 
             nickname: targetUser.pending_member_nickname,
             relation_tag: targetUser.pending_member_relation,
-            
             updated_at: new Date()
-        }).eq('id', currentUserId); // 내 정보를 업데이트
+        }).eq('id', currentUserId);
 
         if (updateError) throw updateError;
         
-        // 성공 후 이동
-        onPairingComplete(targetUser.name);
+        // 성공 모달 -> 확인 누르면 이동
+        showModal(
+          '연결 성공', 
+          `"${targetUser.name}"님과 연결되었습니다!`, 
+          'default', 
+          () => onPairingComplete(targetUser.name),
+          false, 
+          true // 👈 disableBackgroundClose = true
+        );
       } 
       
       // [Case B] 기존 멤버 계정을 복구하는 경우 (재연결)
@@ -108,16 +152,22 @@ export function MemberPairing({ onPairingComplete, onBack }: MemberPairingProps)
 
         if (rpcError) throw rpcError;
 
-        Alert.alert('재연결 성공', `"${targetUser.name}"님의 기록을 모두 불러왔습니다!`, [
-          { text: '시작하기', onPress: () => onPairingComplete('보호자') }
-        ]);
+        showModal(
+          '재연결 성공', 
+          `"${targetUser.name}"님의 기록을 모두 불러왔습니다!`, 
+          'default', 
+          () => onPairingComplete('보호자'),
+          false,
+          true // 👈 disableBackgroundClose = true
+        );
       }
 
     } catch (e: any) {
       console.error("Pairing Error:", e);
-      Alert.alert(
-        '오류 상세 내용', 
-        e.message || JSON.stringify(e) || '알 수 없는 오류가 발생했습니다.'
+      showModal(
+        '오류 발생', 
+        e.message || '알 수 없는 오류가 발생했습니다.', 
+        'danger'
       );
     } finally {
       setIsLoading(false);
@@ -150,10 +200,9 @@ export function MemberPairing({ onPairingComplete, onBack }: MemberPairingProps)
           <ChevronLeft color="#c2410c" size={32} />
         </TouchableOpacity>
 
-        {/* 메인 컨텐츠 영역 (Flex로 공간 분배) */}
+        {/* 메인 컨텐츠 영역 */}
         <View style={styles.content}>
           
-          {/* 타이틀 영역 */}
           <View style={styles.titleSection}>
             <Text style={styles.title}>보호자가 알려준{'\n'}숫자 6개를 눌러주세요</Text>
             
@@ -165,7 +214,6 @@ export function MemberPairing({ onPairingComplete, onBack }: MemberPairingProps)
               ))}
             </View>
 
-            {/* 👇 3. [추가됨] 붙여넣기 버튼 */}
             <TouchableOpacity style={styles.pasteButton} onPress={handlePaste}>
                <ClipboardPaste size={18} color="#6b7280" />
                <Text style={styles.pasteText}>복사한 코드 붙여넣기</Text>
@@ -193,7 +241,6 @@ export function MemberPairing({ onPairingComplete, onBack }: MemberPairingProps)
         </View>
 
         {/* 하단 버튼 영역 */}
-        {/* 👇 4. [수정됨] insets.bottom을 적용하여 가림 현상 해결 */}
         <View style={[styles.footer, { paddingBottom: insets.bottom + 20 }]}>
           <TouchableOpacity 
             style={[styles.submitBtn, !isComplete && styles.submitBtnDisabled]} 
@@ -216,6 +263,24 @@ export function MemberPairing({ onPairingComplete, onBack }: MemberPairingProps)
             </View>
           </View>
         )}
+
+        {/* 🚨 [추가] 커스텀 모달 배치 */}
+        <CustomAlertModal
+            visible={modalConfig.visible}
+            title={modalConfig.title}
+            message={modalConfig.message}
+            type={modalConfig.type}
+            onConfirm={modalConfig.onConfirm}
+            // 👇 여기가 핵심입니다!
+            onClose={() => {
+              // '배경 닫기 금지'가 켜져 있으면 -> 아무것도 안 함 (무시)
+              if (modalConfig.disableBackgroundClose) return;
+              
+              // 아니면 -> 닫기 실행
+              closeModal();
+            }}
+            confirmText="확인" // 성공 시엔 '확인'이나 '시작하기'가 됨
+        />
 
       </View>
     </SafeAreaView>
@@ -257,7 +322,7 @@ const styles = StyleSheet.create({
   keyText: { fontSize: 30, fontWeight: 'bold', color: '#333' },
   delBtn: { backgroundColor: '#fee2e2' },
 
-  // 하단 버튼 (패딩은 인라인 스타일로 동적 적용)
+  // 하단 버튼
   footer: { paddingHorizontal: 20 },
   submitBtn: { 
     backgroundColor: '#ea580c', height: 60, borderRadius: 16, 

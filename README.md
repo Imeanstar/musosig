@@ -152,6 +152,7 @@
   - `FakeCallModal`: 페이크 콜 모달
 
 </details>
+<details>
 <summary><strong>📜 v2.2.1 업데이트 히스토리 보기</strong></summary>
 
 #### 1. **대규모 코드 리팩토링** 🏗️
@@ -362,9 +363,7 @@ musosik/
 │   ├── ManagerMain.tsx            # [v2.3.83] Manager 대시보드 (635줄)
 │   ├── MemberMain.tsx             # [v2.3.83] Member 체크인 (452줄, Optimistic Update)
 │   ├── MemberPairing.tsx          # Member 페어링 (코드 입력)
-│   ├── RoleSelection.tsx          # 역할 선택 화면
 │   ├── AuthManager.tsx            # 이메일 인증 화면
-│   ├── LegalModal.tsx             # 법률 문서 WebView
 │   │
 │   ├── manager/                   # Manager 전용 컴포넌트
 │   │   ├── InviteCodeModal.tsx    # 초대 코드 생성 모달

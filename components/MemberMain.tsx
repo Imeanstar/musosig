@@ -28,6 +28,7 @@ import { FakeCallModal } from './modals/FakeCallModal';
 import { MathChallengeModal } from './modals/MathChallengeModal';
 import { CameraModal } from './modals/CameraModal';
 import { ShakeModal } from './modals/ShakeModal';
+import CustomAlertModal from './modals/CustomAlertModal';
 
 interface MemberMainProps {
   userInfo: UserInfo;
@@ -42,6 +43,11 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
   const [isLoading, setIsLoading] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showFakeCall, setShowFakeCall] = useState(false);
+  const [successModalVisible, setSuccessModalVisible] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
+  
+  const [errorModalVisible, setErrorModalVisible] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   // 인증 Hooks & State
   const math = useMathChallenge();
@@ -183,19 +189,22 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
         is_safe_today: true
       }));
 
-      // 모달 닫기
+      // 카메라 모달이 켜져있다면 닫기
       if (camera.isVisible) camera.close();
       
-      const message = uploadedUrl ? "사진과 함께 안부를 전했습니다! 📸" : "보호자에게 안부를 전했습니다! 👋";
+      // 🚨 [수정] Alert 대신 예쁜 모달 띄우기!
+      const msg = uploadedUrl 
+        ? "사진과 함께 무소식을 전했습니다! 📸\n오늘 하루도 힘내세요!" 
+        : "오늘도 무소식을 전했습니다! 👋\n오늘 하루도 힘내세요!";
       
-      Alert.alert("성공", message, [{ 
-        text: "확인", 
-        onPress: fetchLatestData // 확실하게 한 번 더 갱신
-      }]);
+      setSuccessMessage(msg);      // 메시지 세팅
+      setSuccessModalVisible(true); // 모달 켜기!
 
     } catch (e: any) {
       console.error(e);
-      Alert.alert("오류 발생", e.message || "알 수 없는 오류");
+      // 🚨 [수정] 에러도 예쁜 모달로 띄우기
+      setErrorMessage(e.message || "알 수 없는 오류가 발생했습니다.");
+      setErrorModalVisible(true);
     } finally {
       setIsLoading(false);
     }
@@ -415,6 +424,35 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
       <FakeCallModal 
         visible={showFakeCall} 
         onClose={() => setShowFakeCall(false)} 
+      />
+
+      {/* 🚨 [추가] 성공 알림 모달 */}
+      <CustomAlertModal
+        visible={successModalVisible}
+        title="안부 전송 완료! 🚀"
+        message={successMessage}
+        confirmText="확인"
+        type="default" // 파란색(긍정) 테마
+        onClose={() => {
+          setSuccessModalVisible(false);
+          fetchLatestData(); // 모달 닫을 때 데이터 갱신
+        }}
+        onConfirm={() => {
+          setSuccessModalVisible(false);
+          fetchLatestData(); // 확인 눌러도 데이터 갱신
+        }}
+      />
+
+      {/* 🚨 [추가] 에러 알림 모달 */}
+      <CustomAlertModal
+        visible={errorModalVisible}
+        title="전송 실패 😢"
+        message={errorMessage}
+        confirmText="확인"
+        type="danger" // 빨간색(경고) 테마
+        onClose={() => setErrorModalVisible(false)}
+        onConfirm={() => setErrorModalVisible(false)}
+        cancelText="닫기"
       />
 
     </View>
