@@ -6,6 +6,7 @@ import {
 import { X, LogOut, Bell, User, Check, Lock, Smartphone } from 'lucide-react-native'; 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
+import CustomAlertModal from '../modals/CustomAlertModal';
 
 interface MemberSettingsModalProps {
   visible: boolean;
@@ -29,6 +30,8 @@ export function MemberSettingsModal({ visible, onClose, onLogout, isPremium }: M
   const [callerName, setCallerName] = useState('우리 아빠 ❤️');
   const [selectedRingtoneId, setSelectedRingtoneId] = useState('ringtone1');
   const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
+  const [saveSuccessVisible, setSaveSuccessVisible] = useState(false);
 
   useEffect(() => {
     if (visible) {
@@ -55,10 +58,16 @@ export function MemberSettingsModal({ visible, onClose, onLogout, isPremium }: M
         await AsyncStorage.setItem(STORAGE_KEY_NAME, callerName);
         await AsyncStorage.setItem(STORAGE_KEY_RINGTONE, selectedRingtoneId);
       }
-      Alert.alert('저장 완료', '설정이 저장되었습니다.');
-      onClose();
-    } catch (e) {
-      Alert.alert('오류', '저장에 실패했습니다.');
+      
+      // 🚨 [수정] Alert 대신 모달 켜기!
+      // 여기서 바로 onClose()를 하지 않고, 모달에서 '확인' 누르면 닫히게 합니다.
+      setSaveSuccessVisible(true);
+
+    } catch (e: any) {
+      Alert.alert(
+        '저장 실패 😢', 
+        `오류가 발생했습니다.\n${e.message || JSON.stringify(e)}`
+      );
     }
   };
 
@@ -93,14 +102,7 @@ export function MemberSettingsModal({ visible, onClose, onLogout, isPremium }: M
   };
 
   const handleLogout = () => {
-    Alert.alert(
-      '로그아웃 하시겠습니까?',
-      '로그아웃하면 보호자와 연결이 끊길 수 있습니다.',
-      [
-        { text: '취소', style: 'cancel' },
-        { text: '로그아웃', style: 'destructive', onPress: onLogout }
-      ]
-    );
+    setLogoutModalVisible(true);
   };
 
   const handleLockedPress = () => {
@@ -215,6 +217,40 @@ export function MemberSettingsModal({ visible, onClose, onLogout, isPremium }: M
             <Text style={styles.saveBtnText}>저장하기</Text>
           </TouchableOpacity>
         </View>
+
+        {/* 🚨 [추가] 로그아웃 경고 모달 */}
+        <CustomAlertModal
+          visible={logoutModalVisible}
+          title="로그아웃 하시겠습니까?"
+          message="로그아웃하면 보호자와 연결이 끊길 수 있습니다."
+          confirmText="로그아웃"
+          cancelText="취소"
+          type="danger" // 🔴 빨간색 버튼 (중요!)
+          onClose={() => setLogoutModalVisible(false)} // 닫기/취소
+          onConfirm={() => {
+            setLogoutModalVisible(false); // 모달 닫고
+            onLogout(); // ✅ 진짜 로그아웃 실행
+          }}
+        />
+        {/* 🚨 [추가] 저장 완료 모달 */}
+        <CustomAlertModal
+          visible={saveSuccessVisible}
+          title="저장 완료 ✨"
+          message="설정이 성공적으로 저장되었습니다."
+          confirmText="확인"
+          cancelText="닫기" 
+          type="default" // 파란색 버튼
+          onClose={() => {
+              // 배경 누르거나 취소 누르면 -> 알림창만 닫고 설정창은 유지 (혹은 같이 닫아도 됨)
+              setSaveSuccessVisible(false);
+              onClose(); // 편의상 같이 닫아주는 게 자연스럽습니다.
+          }} 
+          onConfirm={() => {
+              // 확인 누르면 -> 알림창 닫고 + 설정창도 닫기
+              setSaveSuccessVisible(false);
+              onClose(); 
+          }}
+        />
 
       </View>
     </Modal>

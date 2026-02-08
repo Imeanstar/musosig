@@ -1,15 +1,18 @@
 /**
- * MemberMain.tsx (Final Refactored)
- * - 안부 완료 시 초록색 버튼으로 변경 및 비활성화
- * - 흔들기/사진 인증 로직 안정화
- * - UX 개선
+ * MemberMain.tsx
+ * - [추가됨] AppState: 앱이 백그라운드에서 돌아올 때 자동 새로고침
+ * - 안부 완료 시 초록색 버튼 변경
+ * - 흔들기/사진 인증/수학 문제 로직 통합
  */
 
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  View, Text, StyleSheet, TouchableOpacity, 
+  Alert, AppState, ActivityIndicator, Image 
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Heart, Calculator, Camera, Smartphone, CheckCircle, RefreshCw, Settings } from 'lucide-react-native';
+import { Heart, Calculator, Camera, Smartphone, CheckCircle, RefreshCw, Settings, Phone } from 'lucide-react-native';
 import { supabase } from '../lib/supabase';
 import { UserInfo } from '../types';
 import { decode } from 'base64-arraybuffer';
@@ -34,34 +37,30 @@ interface MemberMainProps {
 export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProps) {
   const insets = useSafeAreaInsets();
   
-  // 상태
+  // 상태 관리
   const [userInfo, setUserInfo] = useState<UserInfo>(initialUserInfo);
   const [isLoading, setIsLoading] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showFakeCall, setShowFakeCall] = useState(false);
 
-  // [수정 전] 단순히 DB 값만 믿음
-  // const isDoneToday = userInfo.is_safe_today || false;
+  // 인증 Hooks & State
+  const math = useMathChallenge();
+  const camera = useCameraCapture();
+  const [isShakeModalOpen, setIsShakeModalOpen] = useState(false);
 
-  // ✅ [수정 후] 날짜까지 확인하는 똑똑한 로직
+  // ✅ 오늘 안부 완료 여부 체크 (날짜 비교 로직)
   const isDoneToday = (() => {
-    if (!userInfo.is_safe_today) return false; // 일단 false면 무조건 안 한 거
-    if (!userInfo.last_seen_at) return false;  // 기록 없어도 안 한 거
+    if (!userInfo.is_safe_today) return false; 
+    if (!userInfo.last_seen_at) return false;  
 
     // 마지막 접속 날짜가 '오늘'인지 확인
     const lastDate = new Date(userInfo.last_seen_at).toDateString();
     const todayDate = new Date().toDateString();
 
-    return lastDate === todayDate; // 날짜가 같아야 진짜 한 거!
+    return lastDate === todayDate; 
   })();
 
-  // 인증 Hooks
-  const math = useMathChallenge();
-  const camera = useCameraCapture();
-  const [isShakeModalOpen, setIsShakeModalOpen] = useState(false);
-
-
-  // 최신 정보 불러오기
+  // 🔄 최신 정보 불러오기
   const fetchLatestData = async () => {
     try {
       const { data: myData, error } = await supabase
@@ -72,7 +71,7 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
 
       if (error || !myData) return;
 
-      // 매니저 프리미엄 여부 확인
+      // 매니저 프리미엄 여부 확인 (상속)
       let isManagerPremium = false;
       if (myData.manager_id) {
         const { data: managerData } = await supabase
@@ -88,10 +87,37 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
         ...myData,
         is_premium: myData.is_premium || isManagerPremium
       });
+      
+      console.log('🔄 데이터 갱신 완료:', myData.last_seen_at);
     } catch (e) {
       console.error("데이터 갱신 실패:", e);
     }
   };
+
+  // ⚡️ [추가] 앱이 다시 켜질 때(Foreground) 데이터 자동 갱신
+  const appState = useRef(AppState.currentState);
+
+  useEffect(() => {
+    // 1. 처음 켜질 때 실행
+    fetchLatestData();
+
+    // 2. 백그라운드에서 돌아올 때 실행
+    const subscription = AppState.addEventListener('change', nextAppState => {
+      if (
+        appState.current.match(/inactive|background/) &&
+        nextAppState === 'active'
+      ) {
+        console.log('⚡️ 앱이 다시 활성화되었습니다! 데이터 새로고침...');
+        fetchLatestData();
+      }
+      appState.current = nextAppState;
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
 
   // 사진 업로드 로직
   const uploadImage = async (uri: string): Promise<string> => {
@@ -116,18 +142,17 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
 
   // 체크인 완료 처리
   const completeCheckIn = async (imageUri?: string | null, type: string = '클릭') => {
-    // 🚨 중복 실행 방지
     if (isLoading || isDoneToday) return;
 
     try {
-      setIsLoading(true); // 🔒 로딩 시작 (이게 CameraModal로 전달돼야 함)
+      setIsLoading(true);
       let uploadedUrl = null;
 
       if (imageUri) {
         uploadedUrl = await uploadImage(imageUri);
       }
 
-      const nowISO = new Date().toISOString(); // 현재 시간
+      const nowISO = new Date().toISOString();
 
       // 1. DB 업데이트
       const { error } = await supabase
@@ -151,34 +176,26 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
           proof_url: uploadedUrl 
         });
 
-      // ⚡️ [핵심 수정] 3. 화면 즉시 갱신 (Optimistic Update)
-      // fetchLatestData를 기다리지 않고, 내 손으로 직접 상태를 바꿔버립니다.
+      // 3. 화면 즉시 갱신 (Optimistic Update)
       setUserInfo(prev => ({
         ...prev,
-        last_seen_at: nowISO, // 시간 즉시 변경
-        is_safe_today: true   // 버튼 즉시 초록색으로 변경
+        last_seen_at: nowISO,
+        is_safe_today: true
       }));
 
-      // 4. 모달 닫기
-      camera.close(); // 📸 여기서 모달이 닫힘
+      // 모달 닫기
+      if (camera.isVisible) camera.close();
       
       const message = uploadedUrl ? "사진과 함께 안부를 전했습니다! 📸" : "보호자에게 안부를 전했습니다! 👋";
       
-      // 5. 성공 알림 (확인 누르면 확실하게 데이터 한 번 더 갱신)
       Alert.alert("성공", message, [{ 
         text: "확인", 
-        onPress: fetchLatestData 
+        onPress: fetchLatestData // 확실하게 한 번 더 갱신
       }]);
 
-    } catch (e: any) { // any 타입 지정
+    } catch (e: any) {
       console.error(e);
-      
-      // 🚨 [수정] 개발 단계에서는 진짜 에러 메시지를 띄워야 원인을 알 수 있습니다.
-      Alert.alert(
-        "오류 발생", 
-        e.message || JSON.stringify(e) || "알 수 없는 오류"
-      );
-      
+      Alert.alert("오류 발생", e.message || "알 수 없는 오류");
     } finally {
       setIsLoading(false);
     }
@@ -186,7 +203,6 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
 
   // 버튼 클릭 핸들러
   const handleCheckInPress = () => {
-    // ✅ 이미 완료했다면 아무것도 하지 않음 (더블 체크)
     if (isDoneToday) return;
 
     const method = userInfo.settings?.checkInMethod || '클릭';
@@ -212,9 +228,9 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
     }
   };
 
-  // UI 아이콘 헬퍼 (완료 시 체크 아이콘)
+  // UI 아이콘 헬퍼
   const getMethodIcon = () => {
-    if (isDoneToday) return <CheckCircle size={64} color="#15803d" />; // ✅ 완료 아이콘
+    if (isDoneToday) return <CheckCircle size={64} color="#15803d" />;
 
     const method = userInfo.settings?.checkInMethod || '클릭';
     switch (method) {
@@ -227,7 +243,7 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
   };
 
   const getMethodLabel = () => {
-    if (isDoneToday) return "오늘 안부 완료!"; // ✅ 완료 텍스트
+    if (isDoneToday) return "오늘 안부 완료!";
 
     const method = userInfo.settings?.checkInMethod || '클릭';
     switch (method) {
@@ -269,20 +285,19 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
             style={styles.mainButtonContainer} 
             onPress={handleCheckInPress}
             activeOpacity={0.8}
-            disabled={isDoneToday || isLoading} // ✅ 완료 시 비활성화
+            disabled={isDoneToday || isLoading}
           >
-            {/* ✅ 완료 시: 초록색 그라디언트 / 미완료 시: 빨간색 그라디언트 */}
             <LinearGradient
               colors={isDoneToday ? ['#dcfce7', '#bbf7d0'] : ['#ef4444', '#f43f5e']}
               style={[
                 styles.mainButton,
-                isDoneToday && { borderWidth: 4, borderColor: '#86efac', elevation: 0 } // 완료 시 납작하게
+                isDoneToday && { borderWidth: 4, borderColor: '#86efac', elevation: 0 }
               ]}
             >
               {isLoading ? <ActivityIndicator color="white" size="large" /> : getMethodIcon()}
             </LinearGradient>
             
-            {/* 펄스 효과는 미완료일 때만 */}
+            {/* 펄스 효과 (미완료일 때만) */}
             {!isDoneToday && <View style={styles.pulseRing} />} 
           </TouchableOpacity>
           
@@ -298,6 +313,7 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
         <View style={[styles.footer, { paddingBottom: insets.bottom + 20 }]}>
           <View style={styles.bottomRow}>
             
+            {/* 마지막 안부 카드 */}
             <TouchableOpacity style={styles.halfCard} onPress={fetchLatestData} activeOpacity={0.7}>
               <View style={styles.cardHeader}>
                 <RefreshCw size={14} color="#9ca3af" />
@@ -318,6 +334,7 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
               </View>
             </TouchableOpacity>
 
+            {/* 긴급 도구 카드 (프리미엄) */}
             <TouchableOpacity 
               style={[styles.halfCard, !userInfo.is_premium && styles.disabledCard]} 
               onPress={() => {
@@ -334,7 +351,7 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
               </View>
               <View style={styles.cardBody}>
                 <View style={styles.iconCircle}>
-                  <Text style={{fontSize: 24}}>📞</Text> 
+                   <Phone size={24} color="#ef4444" />
                 </View>
                 <Text style={styles.cardValueText}>페이크 콜</Text>
                 <Text style={styles.cardDateText}>가짜 전화 걸기</Text>
@@ -351,7 +368,7 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
         </View>
       </View>
 
-      {/* 모달들 */}
+      {/* ================= 모달들 ================= */}
       <MathChallengeModal
         visible={math.isVisible}
         n1={math.problem.n1}
@@ -374,11 +391,11 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
       />
 
       <ShakeModal
-        visible={isShakeModalOpen} // ✅ state 이름 변경
-        onCancel={() => setIsShakeModalOpen(false)} // ✅ 닫기 함수 변경
+        visible={isShakeModalOpen}
+        onCancel={() => setIsShakeModalOpen(false)}
         onComplete={() => {
-          setIsShakeModalOpen(false); // 1. 모달 닫고
-          completeCheckIn(null, '흔들어서 안부'); // 2. 전송!
+          setIsShakeModalOpen(false);
+          completeCheckIn(null, '흔들어서 안부');
         }}
       />
 
@@ -386,7 +403,7 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
         visible={showSettings}
         onClose={() => {
           setShowSettings(false);
-          fetchLatestData();
+          fetchLatestData(); // 설정 닫을 때도 갱신
         }}
         onLogout={() => {
           setShowSettings(false);

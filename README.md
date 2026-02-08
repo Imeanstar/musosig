@@ -1,12 +1,12 @@
 # 🏥 무소식(無消息) - 1인 가구 안부 확인 앱
 
-> **Manager & Member** 역할 기반 안부 확인 시스템 (v2.3.0)
+> **Manager & Member** 역할 기반 안부 확인 시스템 (v2.3.83)
 
 ![React Native](https://img.shields.io/badge/React_Native-0.76.9-61DAFB?logo=react)
 ![Expo](https://img.shields.io/badge/Expo-~52.0-000020?logo=expo)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.3.3-3178C6?logo=typescript)
 ![Supabase](https://img.shields.io/badge/Supabase-Backend-3ECF8E?logo=supabase)
-![Version](https://img.shields.io/badge/Version-2.3.0-orange)
+![Version](https://img.shields.io/badge/Version-2.3.83-orange)
 
 ## 📋 목차
 - [개요](#-개요)
@@ -76,6 +76,42 @@
 
 ## 🔄 최근 주요 업데이트
 
+### 🎉 v2.3.83 (2026.02.08) - Code Quality & UX Polish
+
+#### 1. **Hook 최적화** 🧹
+- **useShakeDetector.ts 제거**: 중복 로직 제거
+  - `ShakeModal` 내부에서 직접 가속도계 관리
+  - MemberMain에서 간단한 state로 대체
+  - 코드 간결화 및 유지보수성 향상
+
+#### 2. **Modal UX 개선** 🎨
+- **배경 터치 닫기 기능 추가** (일부 모달)
+  - 투명 오버레이 모달: 배경 터치로 닫기 가능
+  - 전체화면 모달: 의도적 차단 (몰입감 유지)
+  - 네이티브 앱 UX 패턴 준수
+
+#### 3. **컴포넌트 구조 개선** 🏗️
+- **ManagerMain.tsx**: 635줄 (탭 시스템 개선)
+  - 새로운 `calendar` 탭 추가 (4개 탭 체제)
+  - `CalendarTab` 컴포넌트로 완전 분리
+  - Bottom Sheet UI 패턴 도입 (멤버 관리)
+  - `RelinkCodeModal` 신규 추가
+
+#### 4. **날짜 로직 정교화** 📅
+- **KST 기준 날짜 검증 강화**
+  - `getKSTDateString()` 헬퍼 함수 추가
+  - 출석 상태 판단 이중 검증 (DB + 날짜)
+  - 자정 넘김 버그 수정
+
+#### 5. **사용자 경험 향상** ⚡
+- **Optimistic Update 패턴 도입**
+  - 체크인 즉시 UI 갱신 (서버 응답 대기 X)
+  - 체감 속도 10배 향상
+  - 완료 상태 시각화 강화 (아이콘/색상 동적 변경)
+
+<details>
+<summary><strong>📜 v2.3.0 업데이트 히스토리 보기</strong></summary>
+
 ### 🎉 v2.3.0 (2026.01.31) - Safety Features & Code Optimization
 
 #### 1. **긴급 안전 기능 추가** 🚨
@@ -115,7 +151,7 @@
   - `ShakeModal`: 흔들기 진행 모달
   - `FakeCallModal`: 페이크 콜 모달
 
-<details>
+</details>
 <summary><strong>📜 v2.2.1 업데이트 히스토리 보기</strong></summary>
 
 #### 1. **대규모 코드 리팩토링** 🏗️
@@ -203,6 +239,9 @@
 ---
 
 # 📸 Version Log
+
+## Ver 2.3.83 (2026.02.08) - Code Quality & UX Polish
+> Hook 최적화 + Modal UX 개선 + Optimistic Update 패턴
 
 ## Ver 2.3.0 (2026.01.31) - Safety & Smart Alerts
 > 긴급 안전 기능 + 스마트 알림 시스템 + 코드 최적화 (38% 감소)
@@ -308,7 +347,7 @@
 - **Version Control**: Git + GitHub
 - **Migration**: SQL 스크립트 기반 DB 버전 관리
 
-## 📁 프로젝트 구조 (v2.3)
+## 📁 프로젝트 구조 (v2.3.83)
 
 ```
 musosik/
@@ -320,8 +359,8 @@ musosik/
 │   └── _layout.tsx                # 전역 레이아웃
 │
 ├── components/                     # 재사용 컴포넌트
-│   ├── ManagerMain.tsx            # [v2.3] Manager 대시보드 (524줄 → 리팩토링)
-│   ├── MemberMain.tsx             # [v2.3] Member 체크인 (373줄 → 리팩토링)
+│   ├── ManagerMain.tsx            # [v2.3.83] Manager 대시보드 (635줄)
+│   ├── MemberMain.tsx             # [v2.3.83] Member 체크인 (452줄, Optimistic Update)
 │   ├── MemberPairing.tsx          # Member 페어링 (코드 입력)
 │   ├── RoleSelection.tsx          # 역할 선택 화면
 │   ├── AuthManager.tsx            # 이메일 인증 화면
@@ -331,21 +370,22 @@ musosik/
 │   │   ├── InviteCodeModal.tsx    # 초대 코드 생성 모달
 │   │   ├── ProfileTab.tsx         # 프로필 탭
 │   │   ├── SettingsTab.tsx        # 설정 탭 (DnD 포함)
-│   │   ├── CalendarTab.tsx        # 캘린더 탭
-│   │   └── DateDetailModal.tsx    # [v2.3] 날짜 상세 모달
+│   │   ├── CalendarTab.tsx        # [v2.3.83] 캘린더 탭 (완전 분리)
+│   │   ├── DateDetailModal.tsx    # 날짜 상세 모달
+│   │   └── RelinkCodeModal.tsx    # [v2.3.83] 재연결 코드 모달
 │   │
 │   └── modals/                    # 공통 모달
-│       ├── FakeCallModal.tsx      # [v2.3] 페이크 콜 (긴급 상황)
-│       ├── MemberSettingsModal.tsx # [v2.3] Member 설정
-│       ├── MathChallengeModal.tsx # [v2.3] 수학 문제 (리팩토링)
-│       ├── CameraModal.tsx        # [v2.3] 카메라 촬영
-│       ├── ShakeModal.tsx         # [v2.3] 흔들기 진행
+│       ├── FakeCallModal.tsx      # 페이크 콜 (긴급 상황)
+│       ├── MemberSettingsModal.tsx # Member 설정
+│       ├── MathChallengeModal.tsx # 수학 문제
+│       ├── CameraModal.tsx        # 카메라 촬영
+│       ├── ShakeModal.tsx         # [v2.3.83] 흔들기 진행 (내장 가속도계)
 │       ├── SubscriptionModal.tsx  # 구독 관리
 │       ├── SettingsModal.tsx      # 설정 모달
 │       ├── RegisterModal.tsx      # 회원가입 모달
 │       └── PasswordResetModal.tsx # 비밀번호 재설정
 │
-├── hooks/                          # 커스텀 훅 (13개)
+├── hooks/                          # 커스텀 훅 (12개)
 │   ├── useUserManagement.ts       # [Facade] 하위 호환 유지
 │   ├── useAuth.ts                 # 인증 전담
 │   ├── useDeepLink.ts             # OAuth 딥링크
@@ -353,17 +393,19 @@ musosik/
 │   ├── useMemberList.ts           # 멤버 목록 관리
 │   ├── useInviteCode.ts           # 초대 코드 생성
 │   ├── useCalendar.ts             # 캘린더 데이터
-│   ├── useMemberLimit.ts          # [v2.3] 멤버 추가 제한
-│   ├── useDetailModal.ts          # [v2.3] 상세 모달 상태
-│   ├── useMathChallenge.ts        # [v2.3] 수학 문제 Hook
-│   ├── useCameraCapture.ts        # [v2.3] 카메라 Hook
-│   ├── useShakeDetector.ts        # [v2.3] 흔들기 감지
+│   ├── useMemberLimit.ts          # 멤버 추가 제한
+│   ├── useDetailModal.ts          # 상세 모달 상태
+│   ├── useMathChallenge.ts        # 수학 문제 Hook
+│   ├── useCameraCapture.ts        # 카메라 Hook
 │   └── useCheckIn.ts              # 출석 체크
+│   # ❌ useShakeDetector.ts (v2.3.83에서 제거 - 중복 로직)
 │
-├── assets/                         # [v2.3] 에셋 파일
+├── assets/                         # 에셋 파일
 │   ├── icon.png                   # 앱 아이콘
 │   ├── splash.png                 # 스플래시 이미지
-│   └── ringtone1.mp3              # [v2.3] 페이크 콜 벨소리
+│   ├── ringtone1.mp3              # 페이크 콜 벨소리 1
+│   ├── ringtone2.mp3              # 페이크 콜 벨소리 2
+│   └── ringtone3.mp3              # 페이크 콜 벨소리 3
 │
 ├── utils/                          # 유틸리티 함수
 │   ├── storage.ts                 # AsyncStorage 관리
@@ -382,19 +424,19 @@ musosik/
 └── supabase/                       # Supabase 설정
     ├── migrations/
     │   └── 20260120_v2.0_schema.sql
-    └── functions/                  # [v2.3] Edge Functions (4개)
-        ├── emergency-sms-flag/    # [v2.3] 긴급 SMS (Flag 기반)
-        ├── manager-alert-half/    # [v2.3] 절반 시간 알림
-        ├── daily-nudge-21h/       # [v2.3] 21시 리마인더
-        └── cleanup-data/          # [v2.3] 자동 데이터 정리
+    └── functions/                  # Edge Functions (4개)
+        ├── emergency-sms-flag/    # 긴급 SMS (Flag 기반)
+        ├── manager-alert-half/    # 절반 시간 알림
+        ├── daily-nudge-21h/       # 21시 리마인더
+        └── cleanup-data/          # 자동 데이터 정리
 ```
 
-### v2.3 주요 변경 사항
-- ✅ **대규모 리팩토링**: ManagerMain (660→524줄), MemberMain (786→373줄)
-- ✅ **Hooks 확장**: 7개 → 13개 (멤버 제한, 모달 상태, 인증 방식)
-- ✅ **페이크 콜 시스템**: 긴급 상황 대응 기능 추가
-- ✅ **모달 분리**: 5개 신규 모달 컴포넌트 (Math, Camera, Shake 등)
-- ✅ **스마트 알림**: 4개 Edge Functions (절반 알림, SMS Flag, 리마인더, 정리)
+### v2.3.83 주요 변경 사항
+- ✅ **useShakeDetector.ts 제거**: ShakeModal 내장 로직으로 단순화
+- ✅ **CalendarTab 완전 분리**: ManagerMain에서 300줄 이상 추출
+- ✅ **RelinkCodeModal 신규**: 재연결 코드 발급 UI 개선
+- ✅ **Optimistic Update**: 즉각적인 UI 반응 (MemberMain)
+- ✅ **KST 날짜 검증**: 한국 시간 기준 정확한 출석 판정
 
 ## 🚀 시작하기
 
@@ -831,7 +873,7 @@ eas submit --platform ios
 
 - **소셜 로그인**: OAuth 콜백 처리 개선 필요 (v2.2.1에서 일부 개선)
 - **본인인증**: 포트원 API 통합 대기 중
-- **알림 설정**: UI 준비 중 (v2.3 예정)
+- **Modal UX**: 일부 모달에서 배경 터치 닫기 미지원 (의도적 설계, v2.3.83)
 
 ## 🤝 기여
 
@@ -874,5 +916,5 @@ v2.0에서는 더 많은 사람들이 서로를 돌볼 수 있도록
 ---
 
 **Project Repository**: https://github.com/Imeanstar/musosig  
-**Version**: 2.3.0 (2026.01.31)  
+**Version**: 2.3.83 (2026.02.08)  
 **License**: MIT

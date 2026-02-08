@@ -2,7 +2,7 @@
   "expo": {
     "name": "무소식",
     "slug": "musosik",
-    "version": "2.3.82",
+    "version": "2.3.83",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
