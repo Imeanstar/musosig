@@ -1,7 +1,7 @@
 /**
- * SettingsTab.tsx (v2.1 - Fix DnD Error)
- * - 매니저 앱 자체 설정 (방해금지 포함) 상태 관리 추가
- * - 멤버별 설정 리스트 및 모달
+ * SettingsTab.tsx (v2.3 - Show Window Strategy Applied)
+ * - 🔓 멤버 리스트 잠금 해제 (무료 유저도 진입 가능)
+ * - 🔒 개별 옵션(성경, 사진 등) 및 골든타임 설정에 프리미엄 락 적용
  */
 
 import React, { useState, useEffect } from 'react';
@@ -9,27 +9,26 @@ import {
   View, Text, StyleSheet, ScrollView, Switch, TouchableOpacity, 
   Alert, Modal, FlatList
 } from 'react-native';
-import { ChevronRight, ChevronLeft, Check, User as UserIcon, X } from 'lucide-react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { ChevronRight, ChevronLeft, Check, User as UserIcon, X, Lock } from 'lucide-react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { Member, UserSettings } from '../../types'; // 타입 불러오기
+import { Member, UserSettings } from '../../types'; 
 
 interface SettingsTabProps {
   isPremium: boolean;
   onUpgradePress: () => void;
   members: Member[];
   onUpdateMemberSetting: (memberId: string, settings: any) => void;
-  // 🔥 [NEW] 매니저 본인의 설정을 저장하는 함수 (부모에서 받아옴)
   onUpdateManagerSettings?: (settings: UserSettings) => void;
-  managerSettings?: UserSettings; // 매니저 본인의 현재 설정
+  managerSettings?: UserSettings; 
 }
 
 const CHECK_IN_OPTIONS = [
-  { label: '기본 클릭 (터치)', value: '클릭' },
-  { label: '산수 문제 (쉬움)', value: '수학(EASY)' },
-  { label: '산수 문제 (어려움)', value: '수학(HARD)' },
-  { label: '사진 인증', value: '사진인증' },
-  { label: '휴대폰 흔들기', value: '흔들기' },
+  { label: '기본 클릭 (터치)', value: '클릭', isPremium: false },
+  { label: '산수 문제 (쉬움)', value: '수학(EASY)', isPremium: false }, // 무료
+  { label: '산수 문제 (어려움)', value: '수학(HARD)', isPremium: true },
+  { label: '사진 인증', value: '사진인증', isPremium: true },
+  { label: '휴대폰 흔들기', value: '흔들기', isPremium: false }, // 무료
+  { label: '성경 말씀', value: '성경말씀', isPremium: true },
 ];
 
 const ALERT_CYCLES = [48, 72, 96]; 
@@ -40,20 +39,17 @@ export function SettingsTab({
   members, 
   onUpdateMemberSetting,
   onUpdateManagerSettings,
-  managerSettings = {} // 기본값
+  managerSettings = {} 
 }: SettingsTabProps) {
 
-  // --- [1] 매니저 앱 설정 상태 (방해금지 등) ---
-  // 🔥 tempSettings 선언 (에러 해결!)
+  // --- [1] 매니저 앱 설정 상태 ---
   const [tempSettings, setTempSettings] = useState<UserSettings>(managerSettings);
   const [showTimePicker, setShowTimePicker] = useState<'start' | 'end' | null>(null);
 
-  // 부모로부터 받은 설정이 바뀌면 동기화
   useEffect(() => {
     setTempSettings(managerSettings);
   }, [managerSettings]);
 
-  // 매니저 설정 변경 시 즉시 저장 요청 (Debounce 적용하면 더 좋지만 일단 즉시 반영)
   useEffect(() => {
     if (onUpdateManagerSettings) {
        onUpdateManagerSettings(tempSettings);
@@ -71,14 +67,14 @@ export function SettingsTab({
 
   // 멤버 설정 열기
   const openMemberSettings = (member: Member) => {
-    if (!isPremium) return;
-    
+    // 🔓 [수정] 프리미엄 체크 제거! 누구나 열 수 있음
     setSelectedMember(member);
     setTempMethod(member.settings?.checkInMethod || '클릭');
     const currentCycle = member.settings?.alertCycle || 48;
     const idx = ALERT_CYCLES.indexOf(currentCycle);
     setTempCycleIndex(idx >= 0 ? idx : 0);
     setIsModalOpen(true);
+    setIsDropdownOpen(false); 
   };
 
   // 멤버 설정 저장
@@ -95,9 +91,39 @@ export function SettingsTab({
     }
   };
 
+  // 🔒 [수정] 골든타임 변경 핸들러 (프리미엄 체크)
   const handleCycleChange = (direction: 'prev' | 'next') => {
+    if (!isPremium) {
+      Alert.alert(
+        "프리미엄 기능 🔒", 
+        "비상 알림 골든타임 변경은 프리미엄 기능입니다.\n기본 48시간으로 제공됩니다.",
+        [
+            { text: "취소", style: "cancel" },
+            { text: "확인", onPress: () => {} } 
+        ]
+      );
+      return;
+    }
+
     if (direction === 'prev') setTempCycleIndex(prev => Math.max(0, prev - 1));
     else setTempCycleIndex(prev => Math.min(ALERT_CYCLES.length - 1, prev + 1));
+  };
+
+  // 🔒 옵션 선택 핸들러 (프리미엄 체크)
+  const handleSelectOption = (option: typeof CHECK_IN_OPTIONS[0]) => {
+    if (option.isPremium && !isPremium) {
+      Alert.alert(
+        "프리미엄 기능 🔒", 
+        `'${option.label}' 기능은 프리미엄 회원 전용입니다.\n구독 후 이용해주세요!`,
+        [
+            { text: "취소", style: "cancel" },
+            { text: "확인", onPress: () => {} } 
+        ]
+      );
+      return;
+    }
+    setTempMethod(option.value);
+    setIsDropdownOpen(false);
   };
 
 
@@ -135,7 +161,7 @@ export function SettingsTab({
         </View>
       </View>
 
-      {/* 방해금지 섹션 (카드 분리) */}
+      {/* 방해금지 섹션 */}
       <View style={styles.card}>
         <View style={styles.settingItem}>
             <View style={styles.settingTextCol}>
@@ -152,7 +178,6 @@ export function SettingsTab({
             />
         </View>
 
-        {/* 방해금지 시간이 켜져있을 때만 시간 선택기 표시 */}
         {tempSettings.dndEnabled && (
           <View style={styles.dndTimeContainer}>
             <TouchableOpacity 
@@ -215,17 +240,18 @@ export function SettingsTab({
       )}
 
 
-{/* ================= 섹션 2: 멤버별 케어 설정 ================= */}
-<View style={styles.sectionHeader}>
+      {/* ================= 섹션 2: 멤버별 케어 설정 ================= */}
+      <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>멤버별 맞춤 케어</Text>
         <Text style={styles.sectionSubtitle}>멤버를 눌러 개별 설정을 변경하세요.</Text>
       </View>
 
       <View style={styles.premiumSectionContainer}>
-        {/* 🚨 [수정 1] 멤버 리스트 카드 */}
-        <View style={[styles.card, { padding: 0, overflow: 'hidden', minHeight: members.length === 0 ? 0 : 200 }]}>
+        {/* 🚨 [수정됨] minHeight 제거 & maxHeight 적용 & 내부 ScrollView 추가 */}
+        <View style={[styles.card, { padding: 0, overflow: 'hidden' }]}>
+          
           {members.length === 0 ? (
-             /* 🅰️ 멤버가 없을 때: 안내 메시지 (오버레이 없음!) */
+             /* 🅰️ 멤버가 없을 때: 안내 메시지 */
              <View style={{ padding: 32, alignItems: 'center', justifyContent: 'center' }}>
                <UserIcon size={48} color="#e5e7eb" style={{ marginBottom: 12 }} />
                <Text style={{ fontSize: 16, fontWeight: '600', color: '#4b5563', marginBottom: 4 }}>
@@ -236,64 +262,49 @@ export function SettingsTab({
                </Text>
              </View>
           ) : (
-            /* 🅱️ 멤버가 있을 때: 리스트 출력 */
-            members.map((member, index) => (
-              <TouchableOpacity 
-                key={member.id} 
-                style={[
-                  styles.memberRow, 
-                  index !== members.length - 1 && styles.memberRowBorder,
-                  !isPremium && { opacity: 0.3 } // 프리미엄 아니면 흐리게
-                ]}
-                onPress={() => openMemberSettings(member)}
-                disabled={!isPremium}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <View style={styles.avatarCircle}>
-                    <UserIcon size={20} color="#6b7280" />
-                  </View>
-                  <View style={{ marginLeft: 12 }}>
-                    <Text style={styles.memberName}>{member.name}</Text>
-                    <View style={{ flexDirection: 'row', marginTop: 4 }}>
-                      <View style={styles.miniBadge}>
-                        <Text style={styles.miniBadgeText}>
-                          {member.settings?.checkInMethod || '클릭'}
-                        </Text>
-                      </View>
-                      <View style={[styles.miniBadge, { marginLeft: 4, backgroundColor: '#eff6ff' }]}>
-                        <Text style={[styles.miniBadgeText, { color: '#3b82f6' }]}>
-                          {member.settings?.alertCycle || 48}시간
-                        </Text>
+            /* 🅱️ 멤버가 있을 때: 스크롤 영역 (최대 높이 제한) */
+            <ScrollView 
+              style={{ maxHeight: 300 }} // 👈 여기가 핵심! (300px 넘으면 스크롤)
+              nestedScrollEnabled={true} // 부모 스크롤뷰 안에서도 스크롤 되게 함
+              showsVerticalScrollIndicator={true}
+            >
+              {members.map((member, index) => (
+                <TouchableOpacity 
+                  key={member.id} 
+                  style={[
+                    styles.memberRow, 
+                    index !== members.length - 1 && styles.memberRowBorder
+                  ]}
+                  onPress={() => openMemberSettings(member)}
+                  disabled={false} 
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <View style={styles.avatarCircle}>
+                      <UserIcon size={20} color="#6b7280" />
+                    </View>
+                    <View style={{ marginLeft: 12 }}>
+                      <Text style={styles.memberName}>{member.name}</Text>
+                      <View style={{ flexDirection: 'row', marginTop: 4 }}>
+                        <View style={styles.miniBadge}>
+                          <Text style={styles.miniBadgeText}>
+                            {CHECK_IN_OPTIONS.find(o => o.value === member.settings?.checkInMethod)?.label || '기본 클릭'}
+                          </Text>
+                        </View>
+                        <View style={[styles.miniBadge, { marginLeft: 4, backgroundColor: '#eff6ff' }]}>
+                          <Text style={[styles.miniBadgeText, { color: '#3b82f6' }]}>
+                            {member.settings?.alertCycle || 48}시간
+                          </Text>
+                        </View>
                       </View>
                     </View>
                   </View>
-                </View>
-                <ChevronRight size={20} color="#d1d5db" />
-              </TouchableOpacity>
-            ))
+                  <ChevronRight size={20} color="#d1d5db" />
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
           )}
         </View>
-
-        {/* 🚨 [수정 2] 프리미엄 잠금 오버레이: '멤버가 있을 때만' && '프리미엄이 아닐 때' */}
-        {members.length > 0 && !isPremium && (
-          <View style={styles.premiumOverlay}>
-            <Text style={styles.overlayTitle}>
-              멤버별 맞춤 케어는{'\n'}프리미엄 기능입니다
-            </Text>
-            <TouchableOpacity onPress={onUpgradePress}>
-              <LinearGradient
-                colors={['#3b82f6', '#06b6d4']}
-                style={styles.premiumBtn}
-                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-              >
-                <Text style={styles.premiumBtnText}>프리미엄 구독하기</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-        )}
       </View>
-
-      <View style={{ height: 40 }} />
 
 
       {/* ================= [모달] 멤버 개별 설정창 ================= */}
@@ -313,55 +324,79 @@ export function SettingsTab({
             </View>
 
             <ScrollView>
-              {/* 인증 방식 */}
+              {/* 인증 방식 선택 */}
               <Text style={styles.settingLabel}>출석 인증 방식</Text>
               <TouchableOpacity 
                 style={styles.selectorBtn} 
-                onPress={() => setIsDropdownOpen(true)}
+                onPress={() => setIsDropdownOpen(!isDropdownOpen)}
               >
                 <Text style={styles.selectorText}>
                   {CHECK_IN_OPTIONS.find(opt => opt.value === tempMethod)?.label || tempMethod}
                 </Text>
-                <ChevronRight size={24} color="#9ca3af" style={{ transform: [{ rotate: '90deg' }] }} />
+                <ChevronRight size={24} color="#9ca3af" style={{ transform: [{ rotate: isDropdownOpen ? '270deg' : '90deg' }] }} />
               </TouchableOpacity>
               
+              {/* 드롭다운 리스트 */}
               {isDropdownOpen && (
                 <View style={styles.dropdownList}>
-                  {CHECK_IN_OPTIONS.map((opt) => (
-                    <TouchableOpacity 
-                      key={opt.value} 
-                      style={styles.dropdownItem}
-                      onPress={() => {
-                        setTempMethod(opt.value);
-                        setIsDropdownOpen(false);
-                      }}
-                    >
-                      <Text style={[
-                        styles.dropdownItemText, 
-                        tempMethod === opt.value && { color: '#3b82f6', fontWeight: 'bold' }
-                      ]}>
-                        {opt.label}
-                      </Text>
-                      {tempMethod === opt.value && <Check size={16} color="#3b82f6"/>}
-                    </TouchableOpacity>
-                  ))}
+                  {CHECK_IN_OPTIONS.map((opt) => {
+                    const isLocked = opt.isPremium && !isPremium;
+
+                    return (
+                      <TouchableOpacity 
+                        key={opt.value} 
+                        style={[
+                          styles.dropdownItem,
+                          isLocked && { opacity: 0.6 }
+                        ]}
+                        onPress={() => handleSelectOption(opt)}
+                      >
+                        <View style={{flexDirection:'row', alignItems:'center'}}>
+                          {isLocked && (
+                             <Lock size={14} color="#ef4444" style={{marginRight: 6}} />
+                          )}
+                          <Text style={[
+                            styles.dropdownItemText, 
+                            tempMethod === opt.value && { color: '#3b82f6', fontWeight: 'bold' },
+                            isLocked && { color: '#6b7280' } 
+                          ]}>
+                            {opt.label}
+                          </Text>
+                          {opt.isPremium && !isLocked && (
+                             <View style={styles.premiumBadgeMini}>
+                               <Text style={styles.premiumBadgeText}>Premium</Text>
+                             </View>
+                          )}
+                        </View>
+                        {tempMethod === opt.value && <Check size={16} color="#3b82f6"/>}
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
               )}
 
               <View style={{ height: 24 }} />
 
-              {/* 알림 주기 */}
+              {/* 🔒 [수정] 알림 주기 설정 (프리미엄 표시 추가) */}
               <View>
-                <Text style={styles.settingLabel}>비상 알림 골든타임</Text>
+                <View style={{flexDirection:'row', alignItems:'center'}}>
+                    <Text style={styles.settingLabel}>비상 알림 골든타임</Text>
+                    {/* 프리미엄 유저가 아니면 뱃지 표시 */}
+                    {!isPremium && (
+                        <View style={[styles.premiumBadgeMini, {marginTop: 0, marginBottom: 4}]}>
+                           <Text style={styles.premiumBadgeText}>Premium</Text>
+                        </View>
+                    )}
+                </View>
                 <Text style={styles.guideText}>
                   {ALERT_CYCLES[tempCycleIndex]}시간 미접속 시 문자 발송
                 </Text>
                 
-                <View style={styles.stepperContainer}>
+                <View style={[styles.stepperContainer, !isPremium && { opacity: 0.5 }]}> 
                   <TouchableOpacity 
                     style={[styles.stepBtn, tempCycleIndex === 0 && { opacity: 0.3 }]} 
                     onPress={() => handleCycleChange('prev')}
-                    disabled={tempCycleIndex === 0}
+                    disabled={tempCycleIndex === 0} // 락은 함수 내부에서 처리하므로 버튼 자체는 활성
                   >
                     <ChevronLeft size={24} color="#6b7280" />
                   </TouchableOpacity>
@@ -398,7 +433,6 @@ export function SettingsTab({
   );
 }
 
-// 스타일은 민성님이 보내주신 그대로 유지 (아까 제가 드린 추가 스타일 포함됨)
 const styles = StyleSheet.create({
   container: { padding: 20, backgroundColor: '#f3f4f6' },
   sectionHeader: { marginBottom: 12, marginTop: 8 },
@@ -418,7 +452,7 @@ const styles = StyleSheet.create({
   },
   label: { fontSize: 15, color: '#374151', fontWeight: '500' },
 
-  // 방해금지 및 공통 스타일 (민성님 코드 + 제 추가 코드)
+  // 방해금지
   settingItem: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20,
   },
@@ -438,7 +472,7 @@ const styles = StyleSheet.create({
   timeLabel: { fontSize: 12, color: '#6b7280', marginBottom: 2 },
   timeValue: { fontSize: 18, fontWeight: 'bold', color: '#374151' },
 
-  // 멤버 리스트 스타일
+  // 멤버 리스트
   premiumSectionContainer: { position: 'relative' },
   memberRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
@@ -454,16 +488,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f3f4f6', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6
   },
   miniBadgeText: { fontSize: 11, color: '#4b5563', fontWeight: '600' },
-
-  premiumOverlay: {
-    position: 'absolute', top: 0, left: 0, right: 0, bottom: 20,
-    backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 20, justifyContent: 'center', alignItems: 'center',
-    padding: 24, zIndex: 10,
-  },
-  overlayTitle: { color: 'white', fontSize: 18, fontWeight: 'bold', textAlign: 'center', marginBottom: 20 },
-  premiumBtn: { paddingHorizontal: 24, paddingVertical: 14, borderRadius: 12 },
-  premiumBtnText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
-
+  
   // 모달
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   settingsModalContent: {
@@ -482,12 +507,18 @@ const styles = StyleSheet.create({
   },
   selectorText: { fontSize: 16, color: '#374151' },
 
-  dropdownList: { backgroundColor: '#f9fafb', borderRadius: 12, marginTop: 8, padding: 8 },
+  dropdownList: { backgroundColor: '#f9fafb', borderRadius: 12, marginTop: 8, padding: 8, borderWidth: 1, borderColor: '#e5e7eb' },
   dropdownItem: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingVertical: 12, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: '#e5e7eb'
+    paddingVertical: 14, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: '#e5e7eb'
   },
   dropdownItemText: { fontSize: 15, color: '#4b5563' },
+  
+  premiumBadgeMini: {
+    backgroundColor: '#eff6ff', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, marginLeft: 8,
+    borderWidth: 1, borderColor: '#bfdbfe'
+  },
+  premiumBadgeText: { fontSize: 10, color: '#3b82f6', fontWeight: 'bold' },
 
   stepperContainer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 8, marginBottom: 24 },
   stepBtn: { backgroundColor: '#f3f4f6', padding: 12, borderRadius: 12 },

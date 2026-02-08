@@ -140,7 +140,7 @@ export function isMember(profile: Profile): profile is Member {
  * 사용자 설정 (JSONB)
  */
 export interface UserSettings {
-  checkInMethod?: '클릭' | '수학(EASY)' | '수학(HARD)' | '사진인증' | '흔들기'; 
+  checkInMethod?: '클릭' | '수학(EASY)' | '수학(HARD)' | '사진인증' | '흔들기' | '성경말씀'; 
   alertCycle?: number;  // 48, 72, 96 등
   
   // (매니저용 - 나중에 쓸 수도 있음)

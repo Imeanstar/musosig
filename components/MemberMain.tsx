@@ -1,18 +1,22 @@
 /**
  * MemberMain.tsx
- * - [추가됨] AppState: 앱이 백그라운드에서 돌아올 때 자동 새로고침
+ * - [추가됨] 성경 말씀 기능 (프리미엄)
+ * - [수정됨] 수학(EASY) 일반 기능화
+ * - AppState: 앱이 백그라운드에서 돌아올 때 자동 새로고침
  * - 안부 완료 시 초록색 버튼 변경
- * - 흔들기/사진 인증/수학 문제 로직 통합
  */
 
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, Text, StyleSheet, TouchableOpacity, 
-  Alert, AppState, ActivityIndicator, Image 
+  AppState, ActivityIndicator 
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Heart, Calculator, Camera, Smartphone, CheckCircle, RefreshCw, Settings, Phone } from 'lucide-react-native';
+import { 
+  Heart, Calculator, Camera, Smartphone, CheckCircle, 
+  RefreshCw, Settings, Phone, BookOpen 
+} from 'lucide-react-native';
 import { supabase } from '../lib/supabase';
 import { UserInfo } from '../types';
 import { decode } from 'base64-arraybuffer';
@@ -28,6 +32,7 @@ import { FakeCallModal } from './modals/FakeCallModal';
 import { MathChallengeModal } from './modals/MathChallengeModal';
 import { CameraModal } from './modals/CameraModal';
 import { ShakeModal } from './modals/ShakeModal';
+import { BibleModal } from './modals/BibleModal'; // 📖 추가됨
 import CustomAlertModal from './modals/CustomAlertModal';
 
 interface MemberMainProps {
@@ -41,11 +46,13 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
   // 상태 관리
   const [userInfo, setUserInfo] = useState<UserInfo>(initialUserInfo);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // 모달 상태들
   const [showSettings, setShowSettings] = useState(false);
   const [showFakeCall, setShowFakeCall] = useState(false);
+  const [showBible, setShowBible] = useState(false); // 📖 추가됨
   const [successModalVisible, setSuccessModalVisible] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
-  
   const [errorModalVisible, setErrorModalVisible] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -100,14 +107,12 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
     }
   };
 
-  // ⚡️ [추가] 앱이 다시 켜질 때(Foreground) 데이터 자동 갱신
+  // ⚡️ 앱이 다시 켜질 때(Foreground) 데이터 자동 갱신
   const appState = useRef(AppState.currentState);
 
   useEffect(() => {
-    // 1. 처음 켜질 때 실행
     fetchLatestData();
 
-    // 2. 백그라운드에서 돌아올 때 실행
     const subscription = AppState.addEventListener('change', nextAppState => {
       if (
         appState.current.match(/inactive|background/) &&
@@ -189,20 +194,20 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
         is_safe_today: true
       }));
 
-      // 카메라 모달이 켜져있다면 닫기
+      // 모달 닫기 (카메라/성경 등)
       if (camera.isVisible) camera.close();
+      if (showBible) setShowBible(false); 
       
-      // 🚨 [수정] Alert 대신 예쁜 모달 띄우기!
-      const msg = uploadedUrl 
-        ? "사진과 함께 무소식을 전했습니다! 📸\n오늘 하루도 힘내세요!" 
-        : "오늘도 무소식을 전했습니다! 👋\n오늘 하루도 힘내세요!";
-      
-      setSuccessMessage(msg);      // 메시지 세팅
-      setSuccessModalVisible(true); // 모달 켜기!
+      // 성공 메시지 설정
+      let msg = "오늘도 무소식을 전했습니다! 👋\n오늘 하루도 힘내세요!";
+      if (uploadedUrl) msg = "사진과 함께 무소식을 전했습니다! 📸\n오늘 하루도 힘내세요!";
+      if (type === '성경 말씀') msg = "말씀과 함께 안부를 전했습니다 🙏\n평안한 하루 되세요.";
+
+      setSuccessMessage(msg);      
+      setSuccessModalVisible(true); 
 
     } catch (e: any) {
       console.error(e);
-      // 🚨 [수정] 에러도 예쁜 모달로 띄우기
       setErrorMessage(e.message || "알 수 없는 오류가 발생했습니다.");
       setErrorModalVisible(true);
     } finally {
@@ -221,9 +226,11 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
         completeCheckIn(null, '클릭'); 
         break;
       case '수학(EASY)': 
+        // 🔒 이제 누구나 사용 가능 (프리미엄 체크 X)
         math.generate('easy'); 
         break;
       case '수학(HARD)': 
+        // 🔒 HARD는 여전히 프리미엄 유지하고 싶다면 여기서 체크 가능
         math.generate('hard'); 
         break;
       case '사진인증': 
@@ -231,6 +238,15 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
         break;
       case '흔들기': 
         setIsShakeModalOpen(true); 
+        break;
+      case '성경말씀': // 📖 새로 추가된 옵션
+        if (userInfo.is_premium) {
+          setShowBible(true);
+        } else {
+          // 혹시 설정이 꼬여서 프리미엄 아닌데 이 옵션일 경우 대비
+          setErrorMessage("프리미엄 전용 기능입니다.");
+          setErrorModalVisible(true);
+        }
         break;
       default: 
         completeCheckIn();
@@ -247,6 +263,7 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
       case '수학(HARD)': return <Calculator size={56} color="white" />;
       case '사진인증': return <Camera size={56} color="white" />;
       case '흔들기': return <Smartphone size={56} color="white" />;
+      case '성경말씀': return <BookOpen size={56} color="white" />; // 📖 책 아이콘
       default: return <Heart size={64} color="white" fill="white" />;
     }
   };
@@ -260,6 +277,7 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
       case '수학(HARD)': return "두뇌 튼튼 계산";
       case '사진인증': return "사진 찍어 보내기";
       case '흔들기': return "휴대폰 흔들기";
+      case '성경말씀': return "오늘의 말씀 읽기"; // 📖
       default: return "안부 전하기";
     }
   };
@@ -350,7 +368,9 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
                 if (userInfo.is_premium) {
                   setShowFakeCall(true);
                 } else {
-                  Alert.alert("프리미엄 기능 🔒", "보호자가 프리미엄 회원이어야 사용할 수 있습니다.");
+                  // Alert 대신 커스텀 모달 사용 가능 (지금은 간단히 처리)
+                  setErrorMessage("보호자가 프리미엄 회원이어야 사용할 수 있습니다 🔒");
+                  setErrorModalVisible(true);
                 }
               }}
               activeOpacity={0.7}
@@ -378,6 +398,13 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
       </View>
 
       {/* ================= 모달들 ================= */}
+      
+      {/* 📖 성경 모달 */}
+      <BibleModal 
+        visible={showBible}
+        onConfirm={() => completeCheckIn(null, '성경 말씀')}
+      />
+
       <MathChallengeModal
         visible={math.isVisible}
         n1={math.problem.n1}
@@ -426,30 +453,30 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
         onClose={() => setShowFakeCall(false)} 
       />
 
-      {/* 🚨 [추가] 성공 알림 모달 */}
+      {/* 성공 알림 모달 */}
       <CustomAlertModal
         visible={successModalVisible}
         title="안부 전송 완료! 🚀"
         message={successMessage}
         confirmText="확인"
-        type="default" // 파란색(긍정) 테마
+        type="default" 
         onClose={() => {
           setSuccessModalVisible(false);
-          fetchLatestData(); // 모달 닫을 때 데이터 갱신
+          fetchLatestData();
         }}
         onConfirm={() => {
           setSuccessModalVisible(false);
-          fetchLatestData(); // 확인 눌러도 데이터 갱신
+          fetchLatestData();
         }}
       />
 
-      {/* 🚨 [추가] 에러 알림 모달 */}
+      {/* 에러 알림 모달 */}
       <CustomAlertModal
         visible={errorModalVisible}
-        title="전송 실패 😢"
+        title="알림"
         message={errorMessage}
         confirmText="확인"
-        type="danger" // 빨간색(경고) 테마
+        type="danger" 
         onClose={() => setErrorModalVisible(false)}
         onConfirm={() => setErrorModalVisible(false)}
         cancelText="닫기"
