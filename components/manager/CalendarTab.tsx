@@ -3,7 +3,8 @@
  * - 🚨 [수정됨] UTC -> KST(한국시간) 변환 로직 추가
  */
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, 
+  Image, ActivityIndicator, TouchableWithoutFeedback } from 'react-native';
 import { Calendar, LocaleConfig } from 'react-native-calendars';
 import { X, Camera, CheckCircle, XCircle } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
@@ -150,60 +151,77 @@ export function CalendarTab({ member }: CalendarTabProps) {
         />
       )}
 
-      {/* ================= 상세 모달 ================= */}
-      <Modal visible={modalVisible} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
+      {/* ================= 상세 모달 (수정됨) ================= */}
+      <Modal 
+        visible={modalVisible} 
+        transparent 
+        animationType="fade"
+        onRequestClose={() => setModalVisible(false)} // 안드로이드 뒤로가기
+      >
+        {/* 1. 배경 누르면 닫기 */}
+        <TouchableWithoutFeedback onPress={() => setModalVisible(false)}>
+          <View style={styles.modalOverlay}>
             
-            <TouchableOpacity style={styles.closeBtn} onPress={() => setModalVisible(false)}>
-              <X size={24} color="#6b7280" />
-            </TouchableOpacity>
+            {/* 2. 내용물 누르면 안 닫히게 막기 */}
+            <TouchableWithoutFeedback onPress={() => {}}>
+              <View style={styles.modalCard}>
+                
+                {/* 닫기 버튼 (X 아이콘) */}
+                <TouchableOpacity 
+                  style={{ position: 'absolute', top: 16, right: 16, padding: 4, zIndex: 10 }} 
+                  onPress={() => setModalVisible(false)}
+                >
+                  <X size={24} color="#6b7280" />
+                </TouchableOpacity>
 
-            <Text style={styles.modalDate}>{selectedDate}</Text>
+                <Text style={styles.modalDate}>{selectedDate}</Text>
 
-            {selectedLog ? (
-              <View style={styles.resultContainer}>
-                <CheckCircle size={48} color="#10b981" style={{ marginBottom: 12 }} />
-                <Text style={styles.resultTitle}>출석 완료!</Text>
-                <Text style={styles.resultDesc}>
-                  {selectedLog.check_in_type || '터치'}로 출석한 날입니다.
-                </Text>
-                <Text style={styles.resultTime}>
-                  {/* 시간 표시는 원래 기기 설정 따라가서 잘 나옴 */}
-                  ⏰ {new Date(selectedLog.created_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
-                </Text>
+                {selectedLog ? (
+                  <View style={styles.resultContainer}>
+                    <CheckCircle size={48} color="#10b981" style={{ marginBottom: 12 }} />
+                    <Text style={styles.resultTitle}>출석 완료!</Text>
+                    <Text style={styles.resultDesc}>
+                      {selectedLog.check_in_type || '터치'}로 출석한 날입니다.
+                    </Text>
+                    <Text style={styles.resultTime}>
+                      ⏰ {new Date(selectedLog.created_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+                    </Text>
 
-                {selectedLog.proof_url && (
-                  <View style={styles.photoBox}>
-                    <Text style={styles.photoLabel}>📸 인증 사진</Text>
-                    <Image 
-                      source={{ uri: selectedLog.proof_url }} 
-                      style={styles.photo} 
-                      resizeMode="cover" 
-                    />
+                    {selectedLog.proof_url && (
+                      <View style={styles.photoBox}>
+                        <Text style={styles.photoLabel}>📸 인증 사진</Text>
+                        <Image 
+                          source={{ uri: selectedLog.proof_url }} 
+                          style={styles.photo} 
+                          resizeMode="cover" 
+                        />
+                      </View>
+                    )}
+                  </View>
+                ) : (
+                  <View style={styles.resultContainer}>
+                    <XCircle size={48} color="#ef4444" style={{ marginBottom: 12 }} />
+                    <Text style={[styles.resultTitle, { color: '#ef4444' }]}>미출석</Text>
+                    <Text style={styles.resultDesc}>출석하지 않은 날입니다.</Text>
+                    <Text style={styles.hintText}>
+                      전화나 문자로 안부를 물어보세요! 📞
+                    </Text>
                   </View>
                 )}
+                
+                {/* 하단 확인 버튼 */}
+                <TouchableOpacity 
+                  style={[styles.confirmBtn, { backgroundColor: selectedLog ? '#10b981' : '#ef4444' }]} 
+                  onPress={() => setModalVisible(false)}
+                >
+                  <Text style={styles.confirmBtnText}>확인</Text>
+                </TouchableOpacity>
+
               </View>
-            ) : (
-              <View style={styles.resultContainer}>
-                <XCircle size={48} color="#ef4444" style={{ marginBottom: 12 }} />
-                <Text style={[styles.resultTitle, { color: '#ef4444' }]}>미출석</Text>
-                <Text style={styles.resultDesc}>출석하지 않은 날입니다.</Text>
-                <Text style={styles.hintText}>
-                  전화나 문자로 안부를 물어보세요! 📞
-                </Text>
-              </View>
-            )}
-            
-            <TouchableOpacity 
-              style={[styles.confirmBtn, { backgroundColor: selectedLog ? '#10b981' : '#ef4444' }]} 
-              onPress={() => setModalVisible(false)}
-            >
-              <Text style={styles.confirmBtnText}>확인</Text>
-            </TouchableOpacity>
+            </TouchableWithoutFeedback>
 
           </View>
-        </View>
+        </TouchableWithoutFeedback>
       </Modal>
     </View>
   );

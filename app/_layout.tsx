@@ -14,9 +14,6 @@ export default function RootLayout() {
     const handleDeepLink = async (url: string | null) => {
       if (!url) return;
 
-      // 🚨 [최종 확인] 친구 폰에서 이 알림이 뜨면 100% 성공입니다.
-      Alert.alert("딥링크 수신됨", url);
-
       // 토큰 파싱 로직
       if (url.includes('access_token') || url.includes('refresh_token')) {
         

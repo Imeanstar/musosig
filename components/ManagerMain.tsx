@@ -10,6 +10,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { supabase } from '@/lib/supabase';
 import * as Clipboard from 'expo-clipboard';
 import { RelinkCodeModal } from './manager/RelinkCodeModal';
+import CustomAlertModal from '../components/modals/CustomAlertModal'; // 경로 확인!
 
 // Hooks
 import { useUserManagement } from '../hooks/useUserManagement';
@@ -68,6 +69,7 @@ export function ManagerMain({ onBack, userInfo }: ManagerMainProps) {
   const [relinkModalVisible, setRelinkModalVisible] = useState(false);
   const [currentRelinkCode, setCurrentRelinkCode] = useState<string | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
 
   // 선택된 멤버의 캘린더 데이터
   const { currentDate, checkInLogs, changeMonth, getDaysInMonth } = useCalendar(
@@ -126,48 +128,45 @@ export function ManagerMain({ onBack, userInfo }: ManagerMainProps) {
   };
 
   // 🗑️ 멤버 삭제 핸들러
+  // 1. [수정됨] 삭제 버튼 누르면 -> 모달만 켭니다.
   const handleDeleteMember = () => {
     if (!selectedMember) return;
+    setDeleteModalVisible(true); // Alert 대신 모달 State 변경
+  };
 
-    Alert.alert(
-      "정말 삭제하시겠습니까? 🚨",
-      `'${selectedMember.name}'님을 멤버에서 삭제합니다.\n\n모든 출석 기록과 연결된 데이터가 영구적으로 삭제되며, 복구할 수 없습니다.`,
-      [
-        { text: "취소", style: "cancel" },
-        { 
-          text: "삭제하기", 
-          style: "destructive", // 빨간색 버튼 (iOS)
-          onPress: async () => {
-            try {
-              // 1. 출석 기록(Logs) 먼저 싹 지우기
-              const { error: logError } = await supabase
-                .from('check_in_logs')
-                .delete()
-                .eq('member_id', selectedMember.id);
-              
-              if (logError) throw logError;
+  // 2. [신규] 진짜 삭제 로직 (모달에서 '삭제하기' 눌렀을 때 실행)
+  const confirmDeleteMember = async () => {
+    if (!selectedMember) return;
 
-              // 2. 유저(Member) 정보 삭제하기
-              const { error: userError } = await supabase
-                .from('users')
-                .delete()
-                .eq('id', selectedMember.id);
+    try {
+      // (1) 출석 기록 삭제
+      const { error: logError } = await supabase
+        .from('check_in_logs')
+        .delete()
+        .eq('member_id', selectedMember.id);
+      
+      if (logError) throw logError;
 
-              if (userError) throw userError;
+      // (2) 유저 정보 삭제
+      const { error: userError } = await supabase
+        .from('users')
+        .delete()
+        .eq('id', selectedMember.id);
 
-              // 3. 성공 처리
-              Alert.alert("삭제 완료", "멤버 삭제가 완료되었습니다.");
-              setSelectedMember(null); // 상세 화면 닫기
-              fetchMembers(); // 목록 새로고침
+      if (userError) throw userError;
 
-            } catch (e) {
-              console.error("삭제 실패:", e);
-              Alert.alert("오류", "멤버를 삭제하지 못했습니다.\n잠시 후 다시 시도해주세요.");
-            }
-          }
-        }
-      ]
-    );
+      // (3) 성공 처리
+      // 성공 알림은 간단하게 Alert로 띄우거나 생략해도 됩니다.
+      // Alert.alert("삭제 완료", "멤버가 삭제되었습니다."); 
+      
+      setSelectedMember(null); // 상세 화면 닫기
+      setIsSettingsOpen(false); // (혹시 설정 시트가 열려있다면 닫기)
+      fetchMembers(); // 목록 새로고침
+
+    } catch (e) {
+      console.error("삭제 실패:", e);
+      Alert.alert("오류", "멤버를 삭제하지 못했습니다. 다시 시도해주세요.");
+    }
   };
 
   // 날짜 클릭 핸들러
@@ -469,7 +468,7 @@ export function ManagerMain({ onBack, userInfo }: ManagerMainProps) {
               style={styles.sheetMenuBtn}
               onPress={() => {
                 setIsSettingsOpen(false); // 모달 닫고
-                setTimeout(() => handleGenerateRelinkCode(), 300); // 실행 (애니메이션 겹침 방지)
+                setTimeout(() => handleGenerateRelinkCode(), 50); // 실행 (애니메이션 겹침 방지)
               }}
             >
               <View style={[styles.menuIconBox, { backgroundColor: '#eff6ff' }]}>
@@ -489,7 +488,7 @@ export function ManagerMain({ onBack, userInfo }: ManagerMainProps) {
               style={styles.sheetMenuBtn}
               onPress={() => {
                 setIsSettingsOpen(false);
-                setTimeout(() => handleDeleteMember(), 300);
+                setTimeout(() => handleDeleteMember(), 50);
               }}
             >
               <View style={[styles.menuIconBox, { backgroundColor: '#fee2e2' }]}>
@@ -506,6 +505,19 @@ export function ManagerMain({ onBack, userInfo }: ManagerMainProps) {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* 🚨 [추가] 멤버 삭제 경고 모달 */}
+      <CustomAlertModal
+        visible={deleteModalVisible}
+        title="정말 삭제하시겠습니까? 🚨"
+        message={`'${selectedMember?.name}'님을 멤버에서 삭제합니다.\n\n모든 출석 기록과 데이터가 영구적으로\n삭제되며 복구할 수 없습니다.`}
+        confirmText="삭제하기"
+        cancelText="취소"
+        type="danger" // 🔴 빨간색 버튼 활성화
+        onClose={() => setDeleteModalVisible(false)} // 닫기/취소
+        onConfirm={confirmDeleteMember} // ✅ 진짜 삭제 함수 연결
+      />
+
     </View>
   );
 }

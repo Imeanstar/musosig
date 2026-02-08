@@ -1,18 +1,14 @@
 /**
  * InviteCodeModal.tsx
- * 
- * 멤버 초대 코드 생성 및 표시 모달
- * - 초대 정보 입력
- * - 6자리 코드 생성
- * - 클립보드 복사
- * 
- * @extracted from ManagerMain.tsx (584-686줄)
+ * * 멤버 초대 코드 생성 및 표시 모달
+ * - [수정됨] 배경(Overlay) 클릭 시 모달 닫힘 기능 추가
  */
 
 import React, { useState } from 'react';
 import { 
   View, Text, TextInput, TouchableOpacity, 
-  StyleSheet, Modal, ActivityIndicator 
+  StyleSheet, Modal, ActivityIndicator,
+  TouchableWithoutFeedback, Keyboard // 👈 Keyboard도 추가하면 좋습니다 (배경 누를 때 키보드 내리기)
 } from 'react-native';
 import { X, ArrowRight, Copy, RefreshCw } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
@@ -66,104 +62,119 @@ export function InviteCodeModal({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade">
-      <View style={styles.overlay}>
-        <View style={styles.content}>
+    <Modal 
+      visible={visible} 
+      transparent 
+      animationType="fade"
+      onRequestClose={handleClose} // 안드로이드 뒤로가기 대응
+    >
+      {/* 1. 바깥 배경을 누르면 닫히도록 설정 */}
+      <TouchableWithoutFeedback onPress={() => {
+        Keyboard.dismiss(); // 키보드가 떠있으면 내리고
+        handleClose();      // 모달 닫기
+      }}>
+        <View style={styles.overlay}>
           
-          {/* 닫기 버튼 */}
-          <TouchableOpacity style={styles.closeBtn} onPress={handleClose}>
-            <X size={24} color="#9ca3af" />
-          </TouchableOpacity>
-
-          <Text style={styles.title}>멤버 초대하기</Text>
-
-          {/* Step 1: 정보 입력 */}
-          {step === 'input' && (
-            <View style={styles.inputContainer}>
-              <Text style={styles.description}>
-                초대할 가족의 정보를 입력해주세요.{'\n'}이 정보로 자동 가입됩니다.
-              </Text>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>멤버 이름 (호칭)</Text>
-                <TextInput 
-                  style={styles.input} 
-                  placeholder="예: 우리 엄마, 사랑하는 아들" 
-                  value={nickname}
-                  onChangeText={setNickname}
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>나와의 관계</Text>
-                <TextInput 
-                  style={styles.input} 
-                  placeholder="예: 부모님, 자녀" 
-                  value={relation}
-                  onChangeText={setRelation}
-                />
-              </View>
-
-              <TouchableOpacity 
-                style={[
-                  styles.generateBtn,
-                  (!nickname.trim() || !relation.trim() || isLoading) && styles.disabledBtn
-                ]}
-                onPress={handleGenerate}
-                disabled={!nickname.trim() || !relation.trim() || isLoading}
-              >
-                {isLoading ? (
-                  <ActivityIndicator color="white" />
-                ) : (
-                  <>
-                    <Text style={styles.generateBtnText}>초대 코드 만들기</Text>
-                    <ArrowRight size={20} color="white" style={{ marginLeft: 8 }} />
-                  </>
-                )}
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* Step 2: 코드 표시 */}
-          {step === 'show' && (
-            <View style={styles.codeContainer}>
-              <Text style={styles.description}>
-                숫자 칸을 눌러 코드를 복사하고{'\n'}가족에게 전달해주세요.
-              </Text>
+          {/* 2. 내부 컨텐츠를 누를 땐 닫히지 않도록 이벤트 전파 차단 */}
+          <TouchableWithoutFeedback onPress={() => {}}>
+            <View style={styles.content}>
               
-              <View style={styles.codeRow}>
-                <TouchableOpacity 
-                  style={styles.codeBox} 
-                  onPress={handleCopy}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.codeText}>{inviteCode}</Text>
-                  <Copy size={16} color="#9ca3af" style={styles.copyIcon} />
-                </TouchableOpacity>
+              {/* 닫기 버튼 */}
+              <TouchableOpacity style={styles.closeBtn} onPress={handleClose}>
+                <X size={24} color="#9ca3af" />
+              </TouchableOpacity>
 
-                <TouchableOpacity onPress={handleGenerate} style={styles.refreshBtn}>
-                  <RefreshCw size={24} color="#6b7280" />
-                </TouchableOpacity>
-              </View>
+              <Text style={styles.title}>멤버 초대하기</Text>
 
-              {isCopied ? (
-                <Text style={styles.copiedMsg}>✅ 클립보드에 복사되었습니다!</Text>
-              ) : (
-                <Text style={styles.note}>* 코드는 10분 후 만료됩니다.</Text>
+              {/* Step 1: 정보 입력 */}
+              {step === 'input' && (
+                <View style={styles.inputContainer}>
+                  <Text style={styles.description}>
+                    초대할 가족의 정보를 입력해주세요.{'\n'}이 정보로 자동 가입됩니다.
+                  </Text>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.label}>멤버 이름 (호칭)</Text>
+                    <TextInput 
+                      style={styles.input} 
+                      placeholder="예: 우리 엄마, 사랑하는 아들" 
+                      value={nickname}
+                      onChangeText={setNickname}
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.label}>나와의 관계</Text>
+                    <TextInput 
+                      style={styles.input} 
+                      placeholder="예: 부모님, 자녀" 
+                      value={relation}
+                      onChangeText={setRelation}
+                    />
+                  </View>
+
+                  <TouchableOpacity 
+                    style={[
+                      styles.generateBtn,
+                      (!nickname.trim() || !relation.trim() || isLoading) && styles.disabledBtn
+                    ]}
+                    onPress={handleGenerate}
+                    disabled={!nickname.trim() || !relation.trim() || isLoading}
+                  >
+                    {isLoading ? (
+                      <ActivityIndicator color="white" />
+                    ) : (
+                      <>
+                        <Text style={styles.generateBtnText}>초대 코드 만들기</Text>
+                        <ArrowRight size={20} color="white" style={{ marginLeft: 8 }} />
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
               )}
-              
-              <TouchableOpacity style={styles.confirmBtn} onPress={handleClose}>
-                <Text style={styles.confirmBtnText}>확인 완료</Text>
-              </TouchableOpacity>
 
-              <TouchableOpacity onPress={() => setStep('input')} style={styles.editBtn}>
-                <Text style={styles.editBtnText}>정보 수정하기</Text>
-              </TouchableOpacity>
+              {/* Step 2: 코드 표시 */}
+              {step === 'show' && (
+                <View style={styles.codeContainer}>
+                  <Text style={styles.description}>
+                    숫자 칸을 눌러 코드를 복사하고{'\n'}가족에게 전달해주세요.
+                  </Text>
+                  
+                  <View style={styles.codeRow}>
+                    <TouchableOpacity 
+                      style={styles.codeBox} 
+                      onPress={handleCopy}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.codeText}>{inviteCode}</Text>
+                      <Copy size={16} color="#9ca3af" style={styles.copyIcon} />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity onPress={handleGenerate} style={styles.refreshBtn}>
+                      <RefreshCw size={24} color="#6b7280" />
+                    </TouchableOpacity>
+                  </View>
+
+                  {isCopied ? (
+                    <Text style={styles.copiedMsg}>✅ 클립보드에 복사되었습니다!</Text>
+                  ) : (
+                    <Text style={styles.note}>* 코드는 10분 후 만료됩니다.</Text>
+                  )}
+                  
+                  <TouchableOpacity style={styles.confirmBtn} onPress={handleClose}>
+                    <Text style={styles.confirmBtnText}>확인 완료</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity onPress={() => setStep('input')} style={styles.editBtn}>
+                    <Text style={styles.editBtnText}>정보 수정하기</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
             </View>
-          )}
-
+          </TouchableWithoutFeedback>
         </View>
-      </View>
+      </TouchableWithoutFeedback>
     </Modal>
   );
 }
