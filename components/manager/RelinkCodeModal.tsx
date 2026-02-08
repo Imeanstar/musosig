@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react'; // useState 추가
 import { View, Text, Modal, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
-import { X, Copy, RefreshCw } from 'lucide-react-native';
+import { X, Copy, RefreshCw, Check } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
 import { Alert } from 'react-native';
 
@@ -14,10 +14,15 @@ interface RelinkCodeModalProps {
 const { width } = Dimensions.get('window');
 
 export function RelinkCodeModal({ visible, code, memberName, onClose }: RelinkCodeModalProps) {
-  const handleCopy = async () => {
+    const [isCopied, setIsCopied] = useState(false);
+    const handleCopy = async () => {
     if (code) {
-      await Clipboard.setStringAsync(code);
-      Alert.alert("복사 완료", "코드가 클립보드에 복사되었습니다! ✅");
+      await Clipboard.setStringAsync(code); 
+      setIsCopied(true);
+      // 2초 뒤에 원래대로 복구
+      setTimeout(() => {
+        setIsCopied(false);
+      }, 2000);
     }
   };
 
@@ -53,9 +58,27 @@ export function RelinkCodeModal({ visible, code, memberName, onClose }: RelinkCo
               (기존 데이터가 자동으로 복구됩니다)
             </Text>
 
-            <TouchableOpacity style={styles.copyButton} onPress={handleCopy}>
-              <Copy size={20} color="white" style={{ marginRight: 8 }} />
-              <Text style={styles.copyText}>코드 복사하기</Text>
+            <TouchableOpacity 
+              style={[
+                styles.copyButton, 
+                isCopied && { backgroundColor: '#10b981' } // ✅ 복사되면 초록색으로 변경
+              ]} 
+              onPress={handleCopy}
+              disabled={isCopied} // 중복 클릭 방지
+            >
+              {isCopied ? (
+                // ✅ 복사 완료 시 보여줄 UI
+                <>
+                  <Check size={20} color="white" style={{ marginRight: 8 }} />
+                  <Text style={styles.copyText}>복사 완료!</Text>
+                </>
+              ) : (
+                // 🔘 평소 UI
+                <>
+                  <Copy size={20} color="white" style={{ marginRight: 8 }} />
+                  <Text style={styles.copyText}>코드 복사하기</Text>
+                </>
+              )}
             </TouchableOpacity>
           </View>
         </View>

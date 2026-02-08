@@ -6,8 +6,6 @@
  * - 멤버십 상태
  * - 고객 지원 메뉴
  * - 계정 관리
- * 
- * @extracted from ManagerMain.tsx (421-561줄)
  */
 
 import React from 'react';
@@ -31,6 +29,21 @@ export function ProfileTab({
   onDeleteAccount,
   onUpgrade 
 }: ProfileTabProps) {
+
+  const handleLogoutPress = () => {
+    Alert.alert(
+      "로그아웃",
+      "정말 로그아웃 하시겠습니까?",
+      [
+        { text: "취소", style: "cancel" },
+        { 
+          text: "로그아웃", 
+          style: "destructive",
+          onPress: onLogout // 👈 확인을 눌러야만 진짜 로그아웃 실행!
+        }
+      ]
+    );
+  };
 
   // 회원 탈퇴 확인
   const handleDeleteAccount = () => {
@@ -159,7 +172,7 @@ export function ProfileTab({
         <MenuItem 
           icon={<LogOut size={20} color="#4b5563" />}
           label="로그아웃"
-          onPress={onLogout}
+          onPress={handleLogoutPress}
         />
         
         <View style={styles.divider} />
@@ -172,7 +185,7 @@ export function ProfileTab({
         />
       </View>
 
-      <Text style={styles.versionText}>앱 버전 v2.3.43</Text>
+      <Text style={styles.versionText}>앱 버전 v2.3.8</Text>
       <View style={{ height: 40 }} />
       
     </ScrollView>

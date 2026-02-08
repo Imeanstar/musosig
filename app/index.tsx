@@ -35,7 +35,6 @@ export default function Index() {
 
   // ✅ [단순화] 딥링크 체크 로직 삭제하고, 그냥 유저 정보만 로드합니다.
   useEffect(() => {
-    Alert.alert("version 43입니다");
     loadUser();
   }, []);
 
@@ -47,21 +46,12 @@ export default function Index() {
   }, [userInfo]);
 
   const handleLogout = async () => {
-    Alert.alert("로그아웃", "정말 로그아웃 하시겠습니까?", [
-      { text: "취소", style: "cancel" },
-      { 
-        text: "로그아웃", 
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await resetAllData();
-            setCurrentView('role_selection'); // 첫 화면으로 리셋
-          } catch (e) {
-            console.error("로그아웃 실패:", e);
-          }
-        } 
-      }
-    ]);
+    try {
+      await resetAllData();
+      setCurrentView('role_selection'); // 첫 화면으로 리셋
+    } catch (e) {
+      console.error("로그아웃 실패:", e);
+    }
   };
 
   // 🔄 로딩 중

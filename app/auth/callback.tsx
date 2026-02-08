@@ -14,7 +14,7 @@ export default function AuthCallback() {
       const url = await Linking.getInitialURL();
       
       // 🚨 [생존 신고] 친구 폰에서 이 알림이 무조건 뜰 겁니다.
-      Alert.alert("도착했습니다!", url || "주소 없음");
+    //   Alert.alert("도착했습니다!", url || "주소 없음");
 
       if (!url) return;
 
@@ -35,7 +35,7 @@ export default function AuthCallback() {
             });
 
             if (!error) {
-              Alert.alert("성공", "로그인 완료! 홈으로 이동합니다.");
+              // Alert.alert("성공", "로그인 완료! 홈으로 이동합니다.");
               // 세션 설정 후 홈으로 이동
               router.replace('/'); 
               return;

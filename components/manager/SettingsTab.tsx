@@ -215,27 +215,35 @@ export function SettingsTab({
       )}
 
 
-      {/* ================= 섹션 2: 멤버별 케어 설정 ================= */}
-      <View style={styles.sectionHeader}>
+{/* ================= 섹션 2: 멤버별 케어 설정 ================= */}
+<View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>멤버별 맞춤 케어</Text>
         <Text style={styles.sectionSubtitle}>멤버를 눌러 개별 설정을 변경하세요.</Text>
       </View>
 
       <View style={styles.premiumSectionContainer}>
-        {/* 멤버 리스트 카드 */}
-        <View style={[styles.card, { padding: 0, overflow: 'hidden' }]}>
+        {/* 🚨 [수정 1] 멤버 리스트 카드 */}
+        <View style={[styles.card, { padding: 0, overflow: 'hidden', minHeight: members.length === 0 ? 0 : 200 }]}>
           {members.length === 0 ? (
-             <View style={{ padding: 24, alignItems: 'center' }}>
-               <Text style={{ color: '#9ca3af' }}>등록된 멤버가 없습니다.</Text>
+             /* 🅰️ 멤버가 없을 때: 안내 메시지 (오버레이 없음!) */
+             <View style={{ padding: 32, alignItems: 'center', justifyContent: 'center' }}>
+               <UserIcon size={48} color="#e5e7eb" style={{ marginBottom: 12 }} />
+               <Text style={{ fontSize: 16, fontWeight: '600', color: '#4b5563', marginBottom: 4 }}>
+                 등록된 멤버가 없습니다
+               </Text>
+               <Text style={{ fontSize: 13, color: '#9ca3af', textAlign: 'center' }}>
+                 '내 멤버' 탭에서 멤버를 추가하면{'\n'}맞춤 설정을 할 수 있어요!
+               </Text>
              </View>
           ) : (
+            /* 🅱️ 멤버가 있을 때: 리스트 출력 */
             members.map((member, index) => (
               <TouchableOpacity 
                 key={member.id} 
                 style={[
                   styles.memberRow, 
                   index !== members.length - 1 && styles.memberRowBorder,
-                  !isPremium && { opacity: 0.3 }
+                  !isPremium && { opacity: 0.3 } // 프리미엄 아니면 흐리게
                 ]}
                 onPress={() => openMemberSettings(member)}
                 disabled={!isPremium}
@@ -266,8 +274,8 @@ export function SettingsTab({
           )}
         </View>
 
-        {/* 프리미엄 잠금 오버레이 */}
-        {!isPremium && (
+        {/* 🚨 [수정 2] 프리미엄 잠금 오버레이: '멤버가 있을 때만' && '프리미엄이 아닐 때' */}
+        {members.length > 0 && !isPremium && (
           <View style={styles.premiumOverlay}>
             <Text style={styles.overlayTitle}>
               멤버별 맞춤 케어는{'\n'}프리미엄 기능입니다

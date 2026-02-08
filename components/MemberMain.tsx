@@ -18,7 +18,6 @@ import * as FileSystem from 'expo-file-system';
 // Hooks
 import { useMathChallenge } from '../hooks/useMathChallenge';
 import { useCameraCapture } from '../hooks/useCameraCapture';
-import { useShakeDetector } from '../hooks/useShakeDetector';
 
 // Modals
 import { MemberSettingsModal } from './modals/MemberSettingsModal';
@@ -59,25 +58,8 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
   // 인증 Hooks
   const math = useMathChallenge();
   const camera = useCameraCapture();
-  const shake = useShakeDetector();
+  const [isShakeModalOpen, setIsShakeModalOpen] = useState(false);
 
-  // 초기화
-  useEffect(() => {
-    fetchLatestData();
-    // 흔들기 감지 해제는 컴포넌트 언마운트 시
-    return () => shake.unsubscribe();
-  }, []);
-
-  // 🚨 [수정 포인트] 흔들기 완료 감지 로직 추가 (useEffect)
-  // shake.progress 값이 바뀔 때마다 검사합니다.
-  useEffect(() => {
-    // 1. 게이지가 1.0 (100%) 이상이고
-    // 2. 현재 로딩 중이 아니고 (중복 방지)
-    // 3. 오늘 이미 완료한 상태가 아니라면
-    if (shake.progress >= 1 && !isLoading && !isDoneToday) {
-      completeCheckIn(null, '흔들기'); // 완료 처리 실행!
-    }
-  }, [shake.progress]); // dependency에 progress 필수
 
   // 최신 정보 불러오기
   const fetchLatestData = async () => {
@@ -134,27 +116,31 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
 
   // 체크인 완료 처리
   const completeCheckIn = async (imageUri?: string | null, type: string = '클릭') => {
-    // 🚨 이미 로딩 중이면 중복 실행 방지
-    if (isLoading) return;
+    // 🚨 중복 실행 방지
+    if (isLoading || isDoneToday) return;
 
     try {
-      setIsLoading(true); // 로딩 시작
+      setIsLoading(true); // 🔒 로딩 시작 (이게 CameraModal로 전달돼야 함)
       let uploadedUrl = null;
 
       if (imageUri) {
         uploadedUrl = await uploadImage(imageUri);
       }
 
-      // 1. 유저 정보 업데이트
-      await supabase
+      const nowISO = new Date().toISOString(); // 현재 시간
+
+      // 1. DB 업데이트
+      const { error } = await supabase
         .from('users')
         .update({ 
-          last_seen_at: new Date().toISOString(),
+          last_seen_at: nowISO,
           last_proof_url: uploadedUrl,
-          is_safe_today: true, // ✅ 즉시 상태 반영
-          updated_at: new Date().toISOString()
+          is_safe_today: true, 
+          updated_at: nowISO
         })
         .eq('id', userInfo.id);
+
+      if (error) throw error;
 
       // 2. 로그 기록
       await supabase
@@ -165,24 +151,36 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
           proof_url: uploadedUrl 
         });
 
-      // 3. 정리 및 알림
-      shake.unsubscribe(); 
-      camera.close();
+      // ⚡️ [핵심 수정] 3. 화면 즉시 갱신 (Optimistic Update)
+      // fetchLatestData를 기다리지 않고, 내 손으로 직접 상태를 바꿔버립니다.
+      setUserInfo(prev => ({
+        ...prev,
+        last_seen_at: nowISO, // 시간 즉시 변경
+        is_safe_today: true   // 버튼 즉시 초록색으로 변경
+      }));
+
+      // 4. 모달 닫기
+      camera.close(); // 📸 여기서 모달이 닫힘
       
       const message = uploadedUrl ? "사진과 함께 안부를 전했습니다! 📸" : "보호자에게 안부를 전했습니다! 👋";
       
+      // 5. 성공 알림 (확인 누르면 확실하게 데이터 한 번 더 갱신)
       Alert.alert("성공", message, [{ 
         text: "확인", 
-        onPress: () => {
-          fetchLatestData(); // 데이터 갱신
-        } 
+        onPress: fetchLatestData 
       }]);
 
-    } catch (e) {
+    } catch (e: any) { // any 타입 지정
       console.error(e);
-      Alert.alert("오류", "전송 중 문제가 발생했습니다.");
+      
+      // 🚨 [수정] 개발 단계에서는 진짜 에러 메시지를 띄워야 원인을 알 수 있습니다.
+      Alert.alert(
+        "오류 발생", 
+        e.message || JSON.stringify(e) || "알 수 없는 오류"
+      );
+      
     } finally {
-      setIsLoading(false); // 로딩 끝
+      setIsLoading(false);
     }
   };
 
@@ -207,7 +205,7 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
         camera.open(); 
         break;
       case '흔들기': 
-        shake.start(); 
+        setIsShakeModalOpen(true); 
         break;
       default: 
         completeCheckIn();
@@ -372,14 +370,16 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
         onRetake={camera.retake}
         onSend={() => completeCheckIn(camera.photoUri, '사진 인증')}
         onClose={camera.close}
+        isLoading={isLoading}
       />
 
       <ShakeModal
-        visible={shake.isVisible}
-        progress={shake.progress}
-        onCancel={shake.close}
-        // ✅ 흔들기 완료 시 자동 실행되도록 ShakeModal 내부 로직이나 Hook에서 호출 필요
-        // (여기서는 Hook의 onComplete prop 등을 활용하거나, useEffect 감지 방식 사용 권장)
+        visible={isShakeModalOpen} // ✅ state 이름 변경
+        onCancel={() => setIsShakeModalOpen(false)} // ✅ 닫기 함수 변경
+        onComplete={() => {
+          setIsShakeModalOpen(false); // 1. 모달 닫고
+          completeCheckIn(null, '흔들어서 안부'); // 2. 전송!
+        }}
       />
 
       <MemberSettingsModal 

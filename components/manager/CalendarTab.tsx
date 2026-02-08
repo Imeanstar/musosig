@@ -1,8 +1,6 @@
 /**
  * CalendarTab.tsx
- * - 매니저용 달력 탭
- * - 기능: 월별 출석 현황 확인 (초록/빨강), 클릭 시 상세 모달(사진 포함)
- * - 데이터 보관: 3개월 전 데이터까지만 조회
+ * - 🚨 [수정됨] UTC -> KST(한국시간) 변환 로직 추가
  */
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
@@ -11,7 +9,7 @@ import { X, Camera, CheckCircle, XCircle } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
 import { Member } from '../../types';
 
-// 달력 한글 설정
+// 달력 한글 설정 (그대로 유지)
 LocaleConfig.locales['ko'] = {
   monthNames: ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'],
   monthNamesShort: ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'],
@@ -22,7 +20,7 @@ LocaleConfig.locales['ko'] = {
 LocaleConfig.defaultLocale = 'ko';
 
 interface CalendarTabProps {
-  member: Member; // 누구의 달력을 볼지
+  member: Member; 
 }
 
 export function CalendarTab({ member }: CalendarTabProps) {
@@ -30,16 +28,33 @@ export function CalendarTab({ member }: CalendarTabProps) {
   const [markedDates, setMarkedDates] = useState<any>({});
   const [isLoading, setIsLoading] = useState(false);
   
-  // 모달 상태
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedLog, setSelectedLog] = useState<any>(null);
   const [modalVisible, setModalVisible] = useState(false);
 
-  // 🔄 3개월치 로그 불러오기
+  // 🗓️ [수정됨] 기기 설정 무시하고 무조건 한국 시간(KST)으로 계산하는 함수
+  const getKSTDateString = (isoString: string) => {
+    if (!isoString) return "";
+    
+    const date = new Date(isoString);
+    
+    // 1. UTC 기준(밀리초)으로 9시간을 더해서 새로운 시간을 만듭니다.
+    // (예: 5일 밤 10시 -> 6일 아침 7시로 시간 자체를 이동)
+    const kstDate = new Date(date.getTime() + (9 * 60 * 60 * 1000));
+
+    // 2. 이동된 시간에서 UTC 날짜를 뽑아냅니다.
+    // (이미 9시간을 더했으므로 getUTC...를 써야 한국 날짜가 나옵니다)
+    const year = kstDate.getUTCFullYear();
+    const month = String(kstDate.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(kstDate.getUTCDate()).padStart(2, '0');
+    
+    return `${year}-${month}-${day}`;
+  };
+
   const fetchLogs = async () => {
+    console.log("🟢 1. fetchLogs 함수 시작됨!"); // 1번 로그
     setIsLoading(true);
     try {
-      // 3개월 전 날짜 계산
       const threeMonthsAgo = new Date();
       threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
       
@@ -47,13 +62,20 @@ export function CalendarTab({ member }: CalendarTabProps) {
         .from('check_in_logs')
         .select('*')
         .eq('member_id', member.id)
-        .gte('created_at', threeMonthsAgo.toISOString()); // 3개월 필터
+        .gte('created_at', threeMonthsAgo.toISOString());
 
-      if (error) throw error;
+      if (error) {
+        console.error("🔴 DB 에러 발생:", error); // 에러 로그
+        throw error;
+      }
 
-      if (data) {
+      console.log("🟡 2. DB 응답 받음. 데이터 개수:", data?.length); // 2번 로그
+
+      if (data && data.length > 0) {
         setLogs(data);
-        processMarkedDates(data);
+        processMarkedDates(data); // 데이터가 있어야만 실행됨
+      } else {
+        console.log("⚪️ 데이터가 0개라서 점 찍기 함수 실행 안 함");
       }
     } catch (e) {
       console.error(e);
@@ -62,14 +84,22 @@ export function CalendarTab({ member }: CalendarTabProps) {
     }
   };
 
-  // 달력에 점 찍기 (초록색)
+  // 🚨 [수정] 달력에 점 찍기 (KST 기준)
   const processMarkedDates = (data: any[]) => {
+    console.log("🔵 3. 점 찍기 함수(processMarkedDates) 진입!"); // 3번 로그
     const marks: any = {};
-    data.forEach(log => {
-      const dateKey = log.created_at.split('T')[0]; // YYYY-MM-DD
-      marks[dateKey] = {
+    
+    data.forEach((log, index) => {
+      const convertedDate = getKSTDateString(log.created_at);
+      
+      // 첫 번째 데이터만 샘플로 로그 출력
+      if (index === 0) {
+        console.log(`[샘플] 원본: ${log.created_at} -> 변환: ${convertedDate}`);
+      }
+
+      marks[convertedDate] = {
         selected: true,
-        selectedColor: '#10b981', // 초록색 (출석)
+        selectedColor: '#10b981', 
         dotColor: 'white',
       };
     });
@@ -80,19 +110,18 @@ export function CalendarTab({ member }: CalendarTabProps) {
     fetchLogs();
   }, [member]);
 
-  // 📅 날짜 클릭 핸들러
+  // 🚨 [수정] 날짜 클릭 핸들러 (KST 기준 비교)
   const onDayPress = (day: any) => {
-    const dateStr = day.dateString;
-    setSelectedDate(dateStr);
+    const clickedDateStr = day.dateString; // 사용자가 누른 날짜 (예: 2026-02-06)
+    setSelectedDate(clickedDateStr);
 
-    // 해당 날짜에 로그가 있는지 찾기
-    const log = logs.find(l => l.created_at.startsWith(dateStr));
+    // 로그 찾을 때도 한국 시간으로 변환해서 비교해야 함
+    // (기존 startsWith는 UTC 문자열이랑 비교해서 못 찾음)
+    const log = logs.find(l => getKSTDateString(l.created_at) === clickedDateStr);
     
     if (log) {
-      // 출석함 (초록)
       setSelectedLog(log);
     } else {
-      // 출석 안 함 (빨강)
       setSelectedLog(null);
     }
     setModalVisible(true);
@@ -100,7 +129,7 @@ export function CalendarTab({ member }: CalendarTabProps) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.headerTitle}>{member.name}님의 활동 기록</Text>
+      <Text style={styles.headerTitle}>{member.name}님의 활동 기록!</Text>
       <Text style={styles.headerSub}>최근 3개월간의 기록만 보관됩니다.</Text>
 
       {isLoading ? (
@@ -126,7 +155,6 @@ export function CalendarTab({ member }: CalendarTabProps) {
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             
-            {/* 닫기 버튼 */}
             <TouchableOpacity style={styles.closeBtn} onPress={() => setModalVisible(false)}>
               <X size={24} color="#6b7280" />
             </TouchableOpacity>
@@ -134,7 +162,6 @@ export function CalendarTab({ member }: CalendarTabProps) {
             <Text style={styles.modalDate}>{selectedDate}</Text>
 
             {selectedLog ? (
-              // ✅ 출석한 날 (Green Case)
               <View style={styles.resultContainer}>
                 <CheckCircle size={48} color="#10b981" style={{ marginBottom: 12 }} />
                 <Text style={styles.resultTitle}>출석 완료!</Text>
@@ -142,10 +169,10 @@ export function CalendarTab({ member }: CalendarTabProps) {
                   {selectedLog.check_in_type || '터치'}로 출석한 날입니다.
                 </Text>
                 <Text style={styles.resultTime}>
+                  {/* 시간 표시는 원래 기기 설정 따라가서 잘 나옴 */}
                   ⏰ {new Date(selectedLog.created_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
                 </Text>
 
-                {/* 사진이 있으면 보여주기 */}
                 {selectedLog.proof_url && (
                   <View style={styles.photoBox}>
                     <Text style={styles.photoLabel}>📸 인증 사진</Text>
@@ -158,7 +185,6 @@ export function CalendarTab({ member }: CalendarTabProps) {
                 )}
               </View>
             ) : (
-              // ❌ 결석한 날 (Red Case)
               <View style={styles.resultContainer}>
                 <XCircle size={48} color="#ef4444" style={{ marginBottom: 12 }} />
                 <Text style={[styles.resultTitle, { color: '#ef4444' }]}>미출석</Text>
@@ -188,7 +214,6 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#111827', marginBottom: 4 },
   headerSub: { fontSize: 13, color: '#9ca3af', marginBottom: 20 },
   
-  // 모달 스타일
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
   modalCard: { width: '85%', backgroundColor: 'white', borderRadius: 24, padding: 24, alignItems: 'center', elevation: 5 },
   closeBtn: { position: 'absolute', top: 16, right: 16, padding: 4 },

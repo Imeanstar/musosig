@@ -4,7 +4,7 @@ import { View, Text, TouchableOpacity, StyleSheet,
 import { X, CheckCircle, XCircle } from 'lucide-react-native'; // 아이콘 추가
 import { LinearGradient } from 'expo-linear-gradient';
 import { ChevronLeft, ChevronRight, Plus, Settings, 
-  User, Crown, RefreshCw, Camera } from 'lucide-react-native';
+  User, Crown, RefreshCw, Camera, Trash2, Link } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { supabase } from '@/lib/supabase';
@@ -25,6 +25,7 @@ import { ProfileTab } from './manager/ProfileTab';
 import { SettingsTab } from './manager/SettingsTab';
 import { SubscriptionModal } from './modals/SubscriptionModal';
 import { DateDetailModal } from './manager/DateDetailModal';
+import { CalendarTab } from './manager/CalendarTab';
 
 
 // Types
@@ -59,25 +60,34 @@ export function ManagerMain({ onBack, userInfo }: ManagerMainProps) {
   } = useDetailModal();
   
   // 상태
-  const [activeTab, setActiveTab] = useState<'list' | 'notifications' | 'profile'>('list');
+  const [activeTab, setActiveTab] = useState<'list' | 'notifications' | 'profile' | 'calendar'>('list');
   const [selectedMember, setSelectedMember] = useState<MemberData | null>(null);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [currentUser, setCurrentUser] = useState<UserInfo>(userInfo);
   const [relinkModalVisible, setRelinkModalVisible] = useState(false);
   const [currentRelinkCode, setCurrentRelinkCode] = useState<string | null>(null);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // 선택된 멤버의 캘린더 데이터
   const { currentDate, checkInLogs, changeMonth, getDaysInMonth } = useCalendar(
     selectedMember?.id, 
     userInfo.is_premium ?? false
   );
+
   
   
   // 초기 로드
   useEffect(() => {
     if (userInfo) fetchMembers();
   }, [userInfo]);
+
+  const getKSTDateString = (isoString: string) => {
+    if (!isoString) return "";
+    const date = new Date(isoString);
+    const kstDate = new Date(date.getTime() + (9 * 60 * 60 * 1000));
+    return kstDate.toISOString().split('T')[0];
+  };
 
   // 멤버 추가 버튼 클릭
   const handleOpenInviteModal = () => {
@@ -108,6 +118,11 @@ export function ManagerMain({ onBack, userInfo }: ManagerMainProps) {
       setCurrentRelinkCode(code);
       setRelinkModalVisible(true);
     }
+  };
+
+  const handleMemberOptions = () => {
+    if (!selectedMember) return;
+    setIsSettingsOpen(true); // Alert 대신 모달을 엽니다.
   };
 
   // 🗑️ 멤버 삭제 핸들러
@@ -250,137 +265,99 @@ export function ManagerMain({ onBack, userInfo }: ManagerMainProps) {
                 <Text style={styles.emptySubText}>우측 상단 '멤버 추가'를 눌러{'\n'}초대 코드를 확인하세요!</Text>
               </View>
             ) : (
-              members.map((member) => (
-                <TouchableOpacity
-                  key={member.id}
-                  style={styles.memberCard}
-                  onPress={() => setSelectedMember(member)}
-                  activeOpacity={0.9}
-                >
-                  <View style={styles.memberInfo}>
-                    <Text style={styles.memberName}>{member.nickname || member.name} 님</Text>
-                    <Text style={styles.memberStatus}>
-                      {member.is_safe_today ? '오늘 안부를 전했습니다 ✅' : '아직 소식이 없습니다 ⏳'}
-                    </Text>
-                  </View>
-                  <View style={[
-                    styles.statusIcon, 
-                    { backgroundColor: member.is_safe_today ? '#dcfce7' : '#fee2e2' }
-                  ]}>
-                    <Text style={{ fontSize: 24 }}>
-                      {member.is_safe_today ? '😊' : '🥺'}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              ))
+              members.map((member) => {
+                // 🚨 [수정됨] KST(한국시간) 기준으로 정확하게 계산하는 로직
+                const isSafe = (() => {
+                  // 1. DB가 false면 무조건 미출석
+                  if (!member.is_safe_today) return false;
+                  // 2. 기록 자체가 없으면 미출석
+                  if (!member.last_seen_at) return false;
+                  
+                  // 3. 한국 시간으로 변환해서 날짜만 비교 (YYYY-MM-DD)
+                  // (getKSTDateString 함수는 ManagerMain 컴포넌트 상단에 만들어두셨죠?)
+                  const lastDate = getKSTDateString(member.last_seen_at); 
+                  const today = getKSTDateString(new Date().toISOString()); 
+                  
+                  return lastDate === today;
+                })();
+              
+                // 👇 화면 그리는 부분 (UI는 그대로입니다)
+                return (
+                  <TouchableOpacity
+                    key={member.id}
+                    style={styles.memberCard}
+                    onPress={() => {
+                      setSelectedMember(member);
+                      setActiveTab('calendar');  
+                    }}
+                    activeOpacity={0.9}
+                  >
+                    <View style={styles.memberInfo}>
+                      <Text style={styles.memberName}>{member.nickname || member.name} 님</Text>
+                      <Text style={styles.memberStatus}>
+                        {isSafe ? '오늘 안부를 전했습니다 ✅' : '아직 소식이 없습니다 ⏳'}
+                      </Text>
+                    </View>
+                    <View style={[
+                      styles.statusIcon, 
+                      { backgroundColor: isSafe ? '#dcfce7' : '#fee2e2' }
+                    ]}>
+                      <Text style={{ fontSize: 24 }}>
+                        {isSafe ? '😊' : '🥺'}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })
             )}
           </ScrollView>
         )}
 
         {/* 탭 1-상세: 멤버 캘린더 */}
-        {activeTab === 'list' && selectedMember && (
-          <ScrollView contentContainerStyle={styles.scrollContent}>
-            <TouchableOpacity onPress={() => setSelectedMember(null)} style={styles.backButton}>
-              <ChevronLeft size={20} color="#2563eb" />
-              <Text style={styles.backButtonText}>목록으로</Text>
-            </TouchableOpacity>
+        {activeTab === 'calendar' && selectedMember && (
+          <View style={{ flex: 1, backgroundColor: 'white' }}>
+            
+            {/* 🎩 [추가됨] 관리자 헤더바 */}
+            <View style={{ 
+              flexDirection: 'row', 
+              alignItems: 'center', 
+              justifyContent: 'space-between', // 양쪽 끝으로 배치
+              paddingHorizontal: 16, 
+              paddingVertical: 12, 
+              borderBottomWidth: 1,
+              borderBottomColor: '#f3f4f6',
+              backgroundColor: 'white'
+            }}>
+              
+              {/* 1. 뒤로가기 버튼 */}
+              <TouchableOpacity 
+                onPress={() => {
+                  setSelectedMember(null);
+                  setActiveTab('list');
+                }}
+                style={{ padding: 8 }}
+              >
+                <ChevronLeft size={24} color="#1f2937" />
+              </TouchableOpacity>
 
-            {/* 캘린더 카드 */}
-            <View style={styles.calendarCard}>
-              <View style={styles.calendarHeader}>
-                <TouchableOpacity onPress={() => changeMonth(-1)} style={styles.arrowBtn}>
-                  <ChevronLeft size={24} color="#374151" />
-                </TouchableOpacity>
-                <Text style={styles.monthTitle}>
-                  {currentDate.getFullYear()}년 {currentDate.getMonth() + 1}월
-                </Text>
-                <TouchableOpacity onPress={() => changeMonth(1)} style={styles.arrowBtn}>
-                  <ChevronRight size={24} color="#374151" />
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.memberSummary}>
-                <Text style={styles.summaryTitle}>
-                  {selectedMember.nickname || selectedMember.name}님의 기록
-                </Text>
-              </View>
-
-              {/* 요일 헤더 */}
-              <View style={styles.weekRow}>
-                {['일', '월', '화', '수', '목', '금', '토'].map(d => (
-                  <Text key={d} style={styles.weekDayText}>{d}</Text>
-                ))}
-              </View>
-
-              {/* 날짜 그리드 */}
-              <View style={styles.daysGrid}>
-                {Array.from({ length: getDaysInMonth(currentDate).startingDayOfWeek }).map((_, i) => (
-                  <View key={`empty-${i}`} style={styles.dayCell} />
-                ))}
-                {/* 날짜 렌더링 */}
-                {Array.from({ length: getDaysInMonth(currentDate).daysInMonth }).map((_, i) => {
-                   const day = i + 1;
-                   const dateKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                   
-                   const now = new Date();
-                   const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-                   
-                   // 🔥 Map에서 확인 (has -> get)
-                   const logData = checkInLogs.get(dateKey);
-                   const isChecked = !!logData;
-                   const isFuture = dateKey > todayKey;
-                   const isMissed = !isChecked && !isFuture;
-
-                   return (
-                     <TouchableOpacity 
-                       key={day} 
-                       style={[
-                         styles.dayCell, 
-                         isChecked && styles.checkedDay,
-                         isMissed && styles.missedDay
-                       ]}
-                       // 🔥 클릭 이벤트 연결
-                       onPress={() => handleDayPress(day, dateKey)}
-                       disabled={isFuture} // 미래 날짜는 클릭 불가
-                     >
-                       <Text style={[
-                         styles.dayText, 
-                         isChecked && styles.checkedDayText,
-                         isMissed && styles.missedDayText
-                       ]}>
-                         {day}
-                       </Text>
-                     </TouchableOpacity>
-                   );
-                 })}
-              </View>
-            </View>
-
-            {/* 재연결 카드 */}
-            <View style={styles.relinkCard}>
-              <Text style={styles.relinkTitle}>기기 변경 / 재설치</Text>
-              <Text style={styles.relinkDesc}>
-                멤버가 앱을 삭제했거나 기기를 바꿨나요?{'\n'}
-                아래 버튼을 눌러 연결 코드를 다시 발급해주세요.
+              {/* 2. 멤버 이름 (가운데) */}
+              <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#1f2937' }}>
+                {selectedMember.name} 님의 기록
               </Text>
-              <TouchableOpacity style={styles.relinkButton} onPress={handleGenerateRelinkCode}>
-                <RefreshCw size={20} color="white" style={{ marginRight: 8 }} />
-                <Text style={styles.relinkButtonText}>재연결 코드 발급</Text>
+
+              {/* 3. ⚙️ 설정 버튼 (오른쪽) */}
+              <TouchableOpacity 
+                onPress={handleMemberOptions}
+                style={{ padding: 8 }}
+              >
+                <Settings size={24} color="#4b5563" />
               </TouchableOpacity>
             </View>
 
-            {/* 🔥 [NEW] 멤버 삭제 카드 */}
-            <View style={styles.deleteCard}>
-              <Text style={styles.deleteTitle}>멤버 삭제</Text>
-              <Text style={styles.deleteDesc}>
-                더 이상 이 멤버를 관리하지 않거나, 잘못 등록된 경우 멤버를 삭제할 수 있습니다.
-              </Text>
-              <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteMember}>
-                <Text style={styles.deleteButtonText}>멤버 삭제하기</Text>
-              </TouchableOpacity>
-            </View>
-
-          </ScrollView>
+            {/* 📅 달력 컴포넌트 */}
+            <CalendarTab member={selectedMember as Member} />
+            
+          </View>
         )}
 
         {/* 탭 2: 알림 */}
@@ -459,6 +436,76 @@ export function ManagerMain({ onBack, userInfo }: ManagerMainProps) {
          memberName={selectedMember?.nickname || selectedMember?.name || '멤버'}
          onClose={() => setRelinkModalVisible(false)}
        />   
+
+      <Modal
+        visible={isSettingsOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsSettingsOpen(false)}
+      >
+        {/* 1. 배경 (누르면 닫힘) */}
+        <TouchableOpacity 
+          style={styles.bottomSheetOverlay} 
+          activeOpacity={1} 
+          onPress={() => setIsSettingsOpen(false)}
+        >
+          {/* 2. 하단 시트 내용 */}
+          <View style={styles.bottomSheetContainer} onStartShouldSetResponder={() => true}>
+            
+            {/* 핸들바 (디자인 요소) */}
+            <View style={styles.sheetHandle} />
+
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>
+                {selectedMember?.name}님 관리
+              </Text>
+              <TouchableOpacity onPress={() => setIsSettingsOpen(false)}>
+                <X size={24} color="#9ca3af" />
+              </TouchableOpacity>
+            </View>
+
+            {/* 메뉴 1: 재연결 코드 */}
+            <TouchableOpacity 
+              style={styles.sheetMenuBtn}
+              onPress={() => {
+                setIsSettingsOpen(false); // 모달 닫고
+                setTimeout(() => handleGenerateRelinkCode(), 300); // 실행 (애니메이션 겹침 방지)
+              }}
+            >
+              <View style={[styles.menuIconBox, { backgroundColor: '#eff6ff' }]}>
+                <Link size={24} color="#3b82f6" />
+              </View>
+              <View style={styles.menuTextBox}>
+                <Text style={styles.menuTitle}>재연결 코드 발급</Text>
+                <Text style={styles.menuSub}>연결이 끊겼을 때 다시 연결합니다.</Text>
+              </View>
+              <ChevronRight size={20} color="#cbd5e1" />
+            </TouchableOpacity>
+
+            <View style={styles.menuDivider} />
+
+            {/* 메뉴 2: 멤버 삭제 (빨간색) */}
+            <TouchableOpacity 
+              style={styles.sheetMenuBtn}
+              onPress={() => {
+                setIsSettingsOpen(false);
+                setTimeout(() => handleDeleteMember(), 300);
+              }}
+            >
+              <View style={[styles.menuIconBox, { backgroundColor: '#fee2e2' }]}>
+                <Trash2 size={24} color="#ef4444" />
+              </View>
+              <View style={styles.menuTextBox}>
+                <Text style={[styles.menuTitle, { color: '#ef4444' }]}>멤버 삭제</Text>
+                <Text style={styles.menuSub}>모든 기록을 영구적으로 삭제합니다.</Text>
+              </View>
+              <ChevronRight size={20} color="#cbd5e1" />
+            </TouchableOpacity>
+
+            <View style={{ height: 30 }} /> 
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -517,4 +564,72 @@ const styles = StyleSheet.create({
   tabItem: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   tabText: { fontSize: 12, color: '#9ca3af', marginTop: 4 },
   activeTabText: { color: '#3b82f6', fontWeight: 'bold' },
+  bottomSheetOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)', // 반투명 검은 배경
+    justifyContent: 'flex-end', // 바닥에 붙이기
+  },
+  bottomSheetContainer: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: 40, // 아이폰 홈바 공간 확보
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  sheetHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#e5e7eb',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 20,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  sheetTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1f2937',
+  },
+  sheetMenuBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  menuIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  menuTextBox: {
+    flex: 1,
+  },
+  menuTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    marginBottom: 4,
+  },
+  menuSub: {
+    fontSize: 13,
+    color: '#6b7280',
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: '#f3f4f6',
+    marginVertical: 12,
+    marginLeft: 64, // 아이콘 너비만큼 띄우기
+  },
 });
