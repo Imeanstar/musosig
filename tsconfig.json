@@ -3,6 +3,7 @@
   "compilerOptions": {
     "strict": true,
     "esModuleInterop": true,
+    "skipLibCheck": true,
     "paths": {
       "@/*": [
         "./*"
@@ -13,5 +14,9 @@
     "**/*.ts",
     "**/*.tsx",
     "app.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "supabase/functions"
   ]
 }
