@@ -1,21 +1,21 @@
 /**
  * MemberMain.tsx
- * - [추가됨] 성경 말씀 기능 (프리미엄)
- * - [수정됨] 수학(EASY) 일반 기능화
- * - AppState: 앱이 백그라운드에서 돌아올 때 자동 새로고침
- * - 안부 완료 시 초록색 버튼 변경
+ * - 💎 [수정] UI 디자인 변경: 클린 그레이 글래스모피즘
+ * - 배경을 다시 흰색/연회색으로 복귀
+ * - 포인트 카드를 은은한 무채색 유리 질감으로 변경
  */
 
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, Text, StyleSheet, TouchableOpacity, 
-  AppState, ActivityIndicator 
+  AppState, ActivityIndicator, Dimensions, Alert
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+// 💎 [필수] 아이콘 추가 import 확인!
 import { 
   Heart, Calculator, Camera, Smartphone, CheckCircle, 
-  RefreshCw, Settings, Phone, BookOpen 
+  RefreshCw, Settings, Phone, BookOpen, Coins, ChevronRight 
 } from 'lucide-react-native';
 import { supabase } from '../lib/supabase';
 import { UserInfo } from '../types';
@@ -32,8 +32,9 @@ import { FakeCallModal } from './modals/FakeCallModal';
 import { MathChallengeModal } from './modals/MathChallengeModal';
 import { CameraModal } from './modals/CameraModal';
 import { ShakeModal } from './modals/ShakeModal';
-import { BibleModal } from './modals/BibleModal'; // 📖 추가됨
+import { BibleModal } from './modals/BibleModal';
 import CustomAlertModal from './modals/CustomAlertModal';
+import { StoreModal } from './modals/StoreModal';
 
 interface MemberMainProps {
   userInfo: UserInfo;
@@ -45,31 +46,30 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
   
   // 상태 관리
   const [userInfo, setUserInfo] = useState<UserInfo>(initialUserInfo);
+  const [points, setPoints] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   
   // 모달 상태들
   const [showSettings, setShowSettings] = useState(false);
   const [showFakeCall, setShowFakeCall] = useState(false);
-  const [showBible, setShowBible] = useState(false); // 📖 추가됨
+  const [showBible, setShowBible] = useState(false);
   const [successModalVisible, setSuccessModalVisible] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [errorModalVisible, setErrorModalVisible] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [showStore, setShowStore] = useState(false);
 
-  // 인증 Hooks & State
+  // 인증 Hooks
   const math = useMathChallenge();
   const camera = useCameraCapture();
   const [isShakeModalOpen, setIsShakeModalOpen] = useState(false);
 
-  // ✅ 오늘 안부 완료 여부 체크 (날짜 비교 로직)
+  // ✅ 오늘 안부 완료 여부 체크
   const isDoneToday = (() => {
     if (!userInfo.is_safe_today) return false; 
     if (!userInfo.last_seen_at) return false;  
-
-    // 마지막 접속 날짜가 '오늘'인지 확인
     const lastDate = new Date(userInfo.last_seen_at).toDateString();
     const todayDate = new Date().toDateString();
-
     return lastDate === todayDate; 
   })();
 
@@ -84,7 +84,6 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
 
       if (error || !myData) return;
 
-      // 매니저 프리미엄 여부 확인 (상속)
       let isManagerPremium = false;
       if (myData.manager_id) {
         const { data: managerData } = await supabase
@@ -92,7 +91,6 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
           .select('is_premium')
           .eq('id', myData.manager_id)
           .single();
-        
         isManagerPremium = managerData?.is_premium || false;
       }
 
@@ -100,69 +98,48 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
         ...myData,
         is_premium: myData.is_premium || isManagerPremium
       });
-      
-      console.log('🔄 데이터 갱신 완료:', myData.last_seen_at);
+
+      setPoints(myData.points || 0);
+      console.log('🔄 데이터 갱신 완료. 현재 포인트:', myData.points);
     } catch (e) {
       console.error("데이터 갱신 실패:", e);
     }
   };
 
-  // ⚡️ 앱이 다시 켜질 때(Foreground) 데이터 자동 갱신
+  // ⚡️ 앱 활성화 시 자동 갱신
   const appState = useRef(AppState.currentState);
-
   useEffect(() => {
     fetchLatestData();
-
     const subscription = AppState.addEventListener('change', nextAppState => {
-      if (
-        appState.current.match(/inactive|background/) &&
-        nextAppState === 'active'
-      ) {
-        console.log('⚡️ 앱이 다시 활성화되었습니다! 데이터 새로고침...');
+      if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
         fetchLatestData();
       }
       appState.current = nextAppState;
     });
-
-    return () => {
-      subscription.remove();
-    };
+    return () => subscription.remove();
   }, []);
 
-
-  // 사진 업로드 로직
+  // 사진 업로드
   const uploadImage = async (uri: string): Promise<string> => {
     const ext = uri.split('.').pop()?.toLowerCase() || 'jpg';
     const fileName = `${userInfo.id}/${Date.now()}.${ext}`;
-    const base64 = await FileSystem.readAsStringAsync(uri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-
-    const { error } = await supabase.storage
-      .from('proof_shots')
-      .upload(fileName, decode(base64), { contentType: 'image/jpeg', upsert: false });
-
+    const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+    const { error } = await supabase.storage.from('proof_shots').upload(fileName, decode(base64), { contentType: 'image/jpeg', upsert: false });
     if (error) throw error;
-
-    const { data: { publicUrl } } = supabase.storage
-      .from('proof_shots')
-      .getPublicUrl(fileName);
-
+    const { data: { publicUrl } } = supabase.storage.from('proof_shots').getPublicUrl(fileName);
     return publicUrl;
   };
 
-  // 체크인 완료 처리
+  // 💎 체크인 완료 및 포인트 적립
   const completeCheckIn = async (imageUri?: string | null, type: string = '클릭') => {
     if (isLoading || isDoneToday) return;
 
     try {
       setIsLoading(true);
       let uploadedUrl = null;
-
       if (imageUri) {
         uploadedUrl = await uploadImage(imageUri);
       }
-
       const nowISO = new Date().toISOString();
 
       // 1. DB 업데이트
@@ -179,29 +156,39 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
       if (error) throw error;
 
       // 2. 로그 기록
-      await supabase
-        .from('check_in_logs')
-        .insert({ 
+      await supabase.from('check_in_logs').insert({ 
           member_id: userInfo.id,
           check_in_type: type,
           proof_url: uploadedUrl 
+      });
+
+      // 💎 3. 포인트 적립
+      const EARN_AMOUNT = Math.floor(Math.random() * 15) + 1;
+      const { error: pointError } = await supabase.rpc('increment_points', { 
+        row_id: userInfo.id, 
+        amount: EARN_AMOUNT 
+      });
+
+      if (pointError) console.error("포인트 적립 실패:", pointError);
+      else {
+        await supabase.from('point_logs').insert({
+          user_id: userInfo.id,
+          type: '적립',
+          amount: EARN_AMOUNT,
+          description: `안부 확인 (${type})`
         });
+      }
 
-      // 3. 화면 즉시 갱신 (Optimistic Update)
-      setUserInfo(prev => ({
-        ...prev,
-        last_seen_at: nowISO,
-        is_safe_today: true
-      }));
+      // 4. 화면 갱신
+      setUserInfo(prev => ({ ...prev, last_seen_at: nowISO, is_safe_today: true }));
+      setPoints(prev => prev + EARN_AMOUNT);
 
-      // 모달 닫기 (카메라/성경 등)
       if (camera.isVisible) camera.close();
       if (showBible) setShowBible(false); 
       
-      // 성공 메시지 설정
-      let msg = "오늘도 무소식을 전했습니다! 👋\n오늘 하루도 힘내세요!";
-      if (uploadedUrl) msg = "사진과 함께 무소식을 전했습니다! 📸\n오늘 하루도 힘내세요!";
-      if (type === '성경 말씀') msg = "말씀과 함께 안부를 전했습니다 🙏\n평안한 하루 되세요.";
+      let msg = `오늘 안부 완료! (+${EARN_AMOUNT}P 적립 💰)\n매일 적립해서 선물로 교환해보세요!`;
+      if (uploadedUrl) msg = `사진 안부 완료! (+${EARN_AMOUNT}P 적립 💰)\n매일 적립해서 선물로 교환해보세요!`;
+      if (type === '성경 말씀') msg = `말씀 안부 완료! (+${EARN_AMOUNT}P 적립 💰)\n평안한 하루 되세요.`;
 
       setSuccessMessage(msg);      
       setSuccessModalVisible(true); 
@@ -215,69 +202,44 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
     }
   };
 
-  // 버튼 클릭 핸들러
   const handleCheckInPress = () => {
     if (isDoneToday) return;
-
     const method = userInfo.settings?.checkInMethod || '클릭';
-    
     switch (method) {
-      case '클릭': 
-        completeCheckIn(null, '클릭'); 
+      case '클릭': completeCheckIn(null, '클릭'); break;
+      case '수학(EASY)': math.generate('easy'); break;
+      case '수학(HARD)': math.generate('hard'); break;
+      case '사진인증': camera.open(); break;
+      case '흔들기': setIsShakeModalOpen(true); break;
+      case '성경말씀': 
+        if (userInfo.is_premium) setShowBible(true);
+        else { setErrorMessage("프리미엄 전용 기능입니다."); setErrorModalVisible(true); }
         break;
-      case '수학(EASY)': 
-        // 🔒 이제 누구나 사용 가능 (프리미엄 체크 X)
-        math.generate('easy'); 
-        break;
-      case '수학(HARD)': 
-        // 🔒 HARD는 여전히 프리미엄 유지하고 싶다면 여기서 체크 가능
-        math.generate('hard'); 
-        break;
-      case '사진인증': 
-        camera.open(); 
-        break;
-      case '흔들기': 
-        setIsShakeModalOpen(true); 
-        break;
-      case '성경말씀': // 📖 새로 추가된 옵션
-        if (userInfo.is_premium) {
-          setShowBible(true);
-        } else {
-          // 혹시 설정이 꼬여서 프리미엄 아닌데 이 옵션일 경우 대비
-          setErrorMessage("프리미엄 전용 기능입니다.");
-          setErrorModalVisible(true);
-        }
-        break;
-      default: 
-        completeCheckIn();
+      default: completeCheckIn();
     }
   };
 
-  // UI 아이콘 헬퍼
   const getMethodIcon = () => {
     if (isDoneToday) return <CheckCircle size={64} color="#15803d" />;
-
     const method = userInfo.settings?.checkInMethod || '클릭';
     switch (method) {
-      case '수학(EASY)': 
-      case '수학(HARD)': return <Calculator size={56} color="white" />;
+      case '수학(EASY)': case '수학(HARD)': return <Calculator size={56} color="white" />;
       case '사진인증': return <Camera size={56} color="white" />;
       case '흔들기': return <Smartphone size={56} color="white" />;
-      case '성경말씀': return <BookOpen size={56} color="white" />; // 📖 책 아이콘
+      case '성경말씀': return <BookOpen size={56} color="white" />;
       default: return <Heart size={64} color="white" fill="white" />;
     }
   };
 
   const getMethodLabel = () => {
     if (isDoneToday) return "오늘 안부 완료!";
-
     const method = userInfo.settings?.checkInMethod || '클릭';
     switch (method) {
       case '수학(EASY)': return "쉬운 계산 풀기";
       case '수학(HARD)': return "두뇌 튼튼 계산";
       case '사진인증': return "사진 찍어 보내기";
       case '흔들기': return "휴대폰 흔들기";
-      case '성경말씀': return "오늘의 말씀 읽기"; // 📖
+      case '성경말씀': return "오늘의 말씀 읽기";
       default: return "안부 전하기";
     }
   };
@@ -285,6 +247,9 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
   return (
     <View style={styles.container}>
       
+      {/* 💎 [수정] 배경 그라디언트 제거 -> 단색 배경으로 복귀 */}
+      {/* <LinearGradient ... /> 제거됨 */}
+
       {/* 상단 바 */}
       <View style={[styles.topBar, { paddingTop: insets.top + 20 }]}>
         <View>
@@ -298,6 +263,36 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
 
       <View style={styles.content}>
         
+        {/* 💎 [수정] 클린 그레이 글래스모피즘 포인트 카드 */}
+        <View style={styles.glassCardContainer}>
+          <LinearGradient
+            // 흰색 -> 아주 연한 회색 그라디언트로 은은한 유리 느낌
+            colors={['rgba(255,255,255,0.95)', 'rgba(243,244,246,0.9)']}
+            style={styles.glassCard}
+            start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }}
+          >
+            <View style={styles.pointRow}>
+              {/* 아이콘 배경을 연한 회색으로 변경하여 차분하게 */}
+              <View style={styles.coinCircle}>
+                <Coins size={24} color="#d97706" fill="#fbbf24" />
+              </View>
+              <View>
+                <Text style={styles.pointLabel}>내 포인트</Text>
+                {/* 숫자만 주황색으로 강조 */}
+                <Text style={styles.pointValue}>{points.toLocaleString()} P</Text>
+              </View>
+            </View>
+            {/* 상점 버튼도 무채색 베이스에 주황색 포인트 */}
+            <TouchableOpacity 
+              style={styles.shopBtn} 
+              onPress={() => setShowStore(true)} // 👈 여기 수정
+            >
+              <Text style={styles.shopBtnText}>상점 가기</Text>
+              <ChevronRight size={16} color="#15803d" />
+            </TouchableOpacity>
+          </LinearGradient>
+        </View>
+
         <View style={styles.infoRow}>
           <Text style={styles.subGreeting}>
             {isDoneToday 
@@ -323,9 +318,6 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
             >
               {isLoading ? <ActivityIndicator color="white" size="large" /> : getMethodIcon()}
             </LinearGradient>
-            
-            {/* 펄스 효과 (미완료일 때만) */}
-            {!isDoneToday && <View style={styles.pulseRing} />} 
           </TouchableOpacity>
           
           <Text style={[styles.actionLabel, isDoneToday && { color: '#15803d' }]}>
@@ -336,11 +328,9 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
           </Text>
         </View>
 
-        {/* 하단 카드 */}
+        {/* 하단 카드 (기존 디자인 유지) */}
         <View style={[styles.footer, { paddingBottom: insets.bottom + 20 }]}>
           <View style={styles.bottomRow}>
-            
-            {/* 마지막 안부 카드 */}
             <TouchableOpacity style={styles.halfCard} onPress={fetchLatestData} activeOpacity={0.7}>
               <View style={styles.cardHeader}>
                 <RefreshCw size={14} color="#9ca3af" />
@@ -361,16 +351,13 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
               </View>
             </TouchableOpacity>
 
-            {/* 긴급 도구 카드 (프리미엄) */}
             <TouchableOpacity 
               style={[styles.halfCard, !userInfo.is_premium && styles.disabledCard]} 
               onPress={() => {
-                if (userInfo.is_premium) {
-                  setShowFakeCall(true);
-                } else {
-                  // Alert 대신 커스텀 모달 사용 가능 (지금은 간단히 처리)
-                  setErrorMessage("보호자가 프리미엄 회원이어야 사용할 수 있습니다 🔒");
-                  setErrorModalVisible(true);
+                if (userInfo.is_premium) setShowFakeCall(true);
+                else {
+                   setErrorMessage("보호자가 프리미엄 회원이어야 사용할 수 있습니다 🔒");
+                   setErrorModalVisible(true);
                 }
               }}
               activeOpacity={0.7}
@@ -392,130 +379,108 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
                 </View>
               )}
             </TouchableOpacity>
-          
           </View>
         </View>
       </View>
 
-      {/* ================= 모달들 ================= */}
-      
-      {/* 📖 성경 모달 */}
-      <BibleModal 
-        visible={showBible}
-        onConfirm={() => completeCheckIn(null, '성경 말씀')}
-      />
-
+      {/* 모달들 */}
+      <BibleModal visible={showBible} onConfirm={() => completeCheckIn(null, '성경 말씀')} />
       <MathChallengeModal
-        visible={math.isVisible}
-        n1={math.problem.n1}
-        n2={math.problem.n2}
-        userAnswer={math.userAnswer}
-        onChangeAnswer={math.setUserAnswer}
-        onConfirm={() => math.check(() => completeCheckIn(null, '수학 문제'))}
-        onCancel={math.close}
+        visible={math.isVisible} n1={math.problem.n1} n2={math.problem.n2}
+        userAnswer={math.userAnswer} onChangeAnswer={math.setUserAnswer}
+        onConfirm={() => math.check(() => completeCheckIn(null, '수학 문제'))} onCancel={math.close}
       />
-
       <CameraModal
-        visible={camera.isVisible}
-        photoUri={camera.photoUri}
-        cameraRef={camera.cameraRef}
-        onTakePicture={camera.takePicture}
-        onRetake={camera.retake}
-        onSend={() => completeCheckIn(camera.photoUri, '사진 인증')}
-        onClose={camera.close}
-        isLoading={isLoading}
+        visible={camera.isVisible} photoUri={camera.photoUri} cameraRef={camera.cameraRef}
+        onTakePicture={camera.takePicture} onRetake={camera.retake}
+        onSend={() => completeCheckIn(camera.photoUri, '사진 인증')} onClose={camera.close} isLoading={isLoading}
       />
-
       <ShakeModal
-        visible={isShakeModalOpen}
-        onCancel={() => setIsShakeModalOpen(false)}
-        onComplete={() => {
-          setIsShakeModalOpen(false);
-          completeCheckIn(null, '흔들어서 안부');
-        }}
+        visible={isShakeModalOpen} onCancel={() => setIsShakeModalOpen(false)}
+        onComplete={() => { setIsShakeModalOpen(false); completeCheckIn(null, '흔들어서 안부'); }}
       />
-
       <MemberSettingsModal 
-        visible={showSettings}
-        onClose={() => {
-          setShowSettings(false);
-          fetchLatestData(); // 설정 닫을 때도 갱신
-        }}
-        onLogout={() => {
-          setShowSettings(false);
-          onBack();
-        }}
-        isPremium={!!userInfo.is_premium}
+        visible={showSettings} onClose={() => { setShowSettings(false); fetchLatestData(); }}
+        onLogout={() => { setShowSettings(false); onBack(); }} isPremium={!!userInfo.is_premium}
       />
-
-      <FakeCallModal 
-        visible={showFakeCall} 
-        onClose={() => setShowFakeCall(false)} 
-      />
-
-      {/* 성공 알림 모달 */}
+      <FakeCallModal visible={showFakeCall} onClose={() => setShowFakeCall(false)} />
+      
       <CustomAlertModal
-        visible={successModalVisible}
-        title="안부 전송 완료! 🚀"
-        message={successMessage}
-        confirmText="확인"
-        type="default" 
-        onClose={() => {
-          setSuccessModalVisible(false);
-          fetchLatestData();
-        }}
-        onConfirm={() => {
-          setSuccessModalVisible(false);
-          fetchLatestData();
-        }}
+        visible={successModalVisible} title="안부 전송 완료! 🚀" message={successMessage}
+        confirmText="확인" type="default" 
+        onClose={() => { setSuccessModalVisible(false); fetchLatestData(); }}
+        onConfirm={() => { setSuccessModalVisible(false); fetchLatestData(); }}
       />
-
-      {/* 에러 알림 모달 */}
       <CustomAlertModal
-        visible={errorModalVisible}
-        title="알림"
-        message={errorMessage}
-        confirmText="확인"
-        type="danger" 
-        onClose={() => setErrorModalVisible(false)}
-        onConfirm={() => setErrorModalVisible(false)}
-        cancelText="닫기"
+        visible={errorModalVisible} title="알림" message={errorMessage}
+        confirmText="확인" type="danger" 
+        onClose={() => setErrorModalVisible(false)} onConfirm={() => setErrorModalVisible(false)} cancelText="닫기"
       />
-
+      <StoreModal 
+        visible={showStore} 
+        onClose={() => setShowStore(false)}
+        myPoints={points}
+        onPurchaseComplete={() => {
+          fetchLatestData(); // 포인트 갱신
+          // 필요하면 구매 성공 축하 모달 띄우기 가능
+        }}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  // 💎 [수정] 배경색 복귀
   container: { flex: 1, backgroundColor: '#f9fafb' },
+  
+  // 💎 [수정] 클린 그레이 글래스모피즘 스타일
+  glassCardContainer: { marginTop: 10, marginBottom: 20 },
+  glassCard: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    padding: 20, borderRadius: 24,
+    // 아주 얇은 회색 테두리와 은은한 그림자
+    borderWidth: 1, borderColor: 'rgba(229, 231, 235, 0.5)', 
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05, shadowRadius: 12, elevation: 2,
+  },
+  pointRow: { flexDirection: 'row', alignItems: 'center' },
+  coinCircle: {
+    width: 48, height: 48, borderRadius: 24,
+    backgroundColor: '#f3f4f6', // 연한 회색 배경
+    justifyContent: 'center', alignItems: 'center', marginRight: 14,
+  },
+  // MemberMain.tsx의 styles 부분 수정
+
+  pointLabel: { fontSize: 13, color: '#166534', fontWeight: '600', marginBottom: 2 }, // 🌲 진한 녹색 라벨
+  pointValue: { fontSize: 22, fontWeight: 'bold', color: '#15803d' }, // 🌲 메인 녹색 강조 숫자
+  
+  shopBtn: {
+    flexDirection: 'row', alignItems: 'center', 
+    backgroundColor: '#f0fdf4', // 🌲 아주 연한 녹색 버튼 배경
+    paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20,
+    borderWidth: 1, borderColor: '#dcfce7' // 🌲 연한 테두리 추가로 디테일 살리기
+  },
+  shopBtnText: { fontSize: 13, color: '#15803d', fontWeight: '600', marginRight: 4 }, // 🌲 메인 녹색 텍스트
+
+  // 기존 스타일
   topBar: { 
-    backgroundColor: 'white', 
-    paddingHorizontal: 24, 
-    paddingBottom: 20, 
-    borderBottomWidth: 1, 
-    borderBottomColor: '#f3f4f6', 
-    elevation: 4, 
-    zIndex: 10,
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center' 
+    backgroundColor: 'transparent', // 배경색 투명으로 (뒤에 배경색이 보이게)
+    paddingHorizontal: 24, paddingBottom: 20, 
+    zIndex: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' 
   },
   topBarGreeting: { fontSize: 16, color: '#6b7280', marginBottom: 2 },
   topBarName: { fontSize: 24, fontWeight: 'bold', color: '#111827' },
   settingsBtn: { 
-    padding: 10, 
-    backgroundColor: 'white', 
-    borderRadius: 20, 
-    elevation: 2,
-    borderWidth: 1,
-    borderColor: '#f3f4f6'
+    padding: 10, backgroundColor: 'white',
+    borderRadius: 20, borderWidth: 1, borderColor: '#e5e7eb', elevation: 1
   },
-  content: { flex: 1, paddingHorizontal: 24, paddingTop: 20 },
+  
+  content: { flex: 1, paddingHorizontal: 24, paddingTop: 10 },
   infoRow: { flexDirection: 'row', marginBottom: 20 },
   subGreeting: { fontSize: 16, color: '#4b5563', lineHeight: 24, flex: 1 },
   centerArea: { alignItems: 'center', justifyContent: 'center', flex: 1 },
   mainButtonContainer: { width: 200, height: 200, justifyContent: 'center', alignItems: 'center', marginBottom: 24, position: 'relative' },
-  mainButton: { width: 180, height: 180, borderRadius: 90, justifyContent: 'center', alignItems: 'center', elevation: 10, shadowColor: '#ef4444', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20, zIndex: 2 },
+  mainButton: { width: 180, height: 180, borderRadius: 90, justifyContent: 'center', alignItems: 'center', elevation: 5, shadowColor: '#000000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, zIndex: 2 },
   pulseRing: { position: 'absolute', width: 220, height: 220, borderRadius: 110, borderWidth: 2, borderColor: '#fca5a5', opacity: 0.5, zIndex: 1 },
   actionLabel: { fontSize: 28, fontWeight: 'bold', color: '#111827', marginBottom: 8 },
   actionSubLabel: { fontSize: 16, color: '#6b7280' },

@@ -8,6 +8,7 @@ import { useUserManagement } from '../hooks/useUserManagement';
 import { UserInfo } from '../types';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PasswordResetModal } from './modals/PasswordResetModal';
+import CustomAlertModal from './modals/CustomAlertModal';
 
 interface AuthManagerProps {
   onBack: () => void;
@@ -27,6 +28,8 @@ export function AuthManager({ onBack, initialMode = 'login', socialUser, onSucce
   const [password, setPassword] = useState('');
   const [name, setName] = useState(socialUser?.name || '');
   const [phone, setPhone] = useState(socialUser?.phone || '');
+  const [errorModalVisible, setErrorModalVisible] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   
   // 🔥 Password Reset Modal State
   const [resetModalVisible, setResetModalVisible] = useState(false);
@@ -50,23 +53,34 @@ export function AuthManager({ onBack, initialMode = 'login', socialUser, onSucce
   const handleSubmit = async () => {
     if (!canSubmit()) return;
 
-    let success = false;
+    // 🚨 [수정 1] 타입을 명시해서 'error'가 없을 수도 있음(optional)을 알려줍니다.
+    let result: { success: boolean; error?: string } = { success: false, error: '' };
 
     if (mode === 'login') {
-      success = await loginWithEmail(email, password);
-    } else if (mode === 'signup') {
-      success = await signUpWithEmail(email, password, name, phone);
-    } else if (mode === 'social_finish') {
+      // 이제 에러가 나지 않습니다.
+      result = await loginWithEmail(email, password);
+    } 
+    else if (mode === 'signup') {
+      const success = await signUpWithEmail(email, password, name, phone);
+      result = { success, error: success ? '' : '회원가입 실패' };
+    } 
+    else if (mode === 'social_finish') {
         if (socialUser?.id) {
-            success = await updateSocialUserInfo(socialUser.id, phone, name);
+            // 🚨 [수정 2] social_finish도 result 변수에 결과를 담도록 통일했습니다.
+            const success = await updateSocialUserInfo(socialUser.id, phone, name);
+            result = { success, error: success ? '' : '정보 업데이트 실패' };
           } else {
             Alert.alert("오류", "사용자 정보를 찾을 수 없습니다.");
             return;
           }
     }   
 
-    if (success && onSuccess) {
-      onSuccess();
+    if (result.success) {
+      if (onSuccess) onSuccess();
+    } else {
+      // 🚨 실패 시 Alert 대신 예쁜 모달 띄우기!
+      setErrorMessage(result.error || "작업을 처리할 수 없습니다.");
+      setErrorModalVisible(true);
     }
   };
 
@@ -234,6 +248,16 @@ export function AuthManager({ onBack, initialMode = 'login', socialUser, onSucce
           />
         </View>
       </ScrollView>
+
+      <CustomAlertModal
+        visible={errorModalVisible}
+        title="알림"
+        message={errorMessage}
+        confirmText="확인"
+        type="danger" // 빨간색 경고 스타일
+        onClose={() => setErrorModalVisible(false)}
+        onConfirm={() => setErrorModalVisible(false)}
+      />
     </KeyboardAvoidingView>
   );
 }

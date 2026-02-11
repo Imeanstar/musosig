@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, 
-  ScrollView, RefreshControl, Alert, Dimensions, Image, Modal } from 'react-native';
+  ScrollView, RefreshControl, Alert, Dimensions, 
+  Image, Modal, BackHandler, 
+  ToastAndroid, Platform } from 'react-native';
 import { X, CheckCircle, XCircle } from 'lucide-react-native'; // 아이콘 추가
 import { LinearGradient } from 'expo-linear-gradient';
 import { ChevronLeft, ChevronRight, Plus, Settings, 
@@ -83,6 +85,45 @@ export function ManagerMain({ onBack, userInfo }: ManagerMainProps) {
   useEffect(() => {
     if (userInfo) fetchMembers();
   }, [userInfo]);
+
+  const [exitApp, setExitApp] = useState(false);
+
+  useEffect(() => {
+    const backAction = () => {
+      // 1. 만약 모달이 켜져 있다면? (여기서 처리 안 해도 됨)
+      // 모달은 위의 '상황 1'에서 onRequestClose로 처리되므로, 
+      // 모달이 없을 때만 이 코드가 작동합니다.
+
+      // 2. 플랫폼이 iOS면 무시 (iOS는 뒤로가기 버튼이 없음)
+      if (Platform.OS !== 'android') return false;
+
+      // 3. '뒤로가기' 로직 시작
+      if (!exitApp) {
+        setExitApp(true);
+        ToastAndroid.show('한 번 더 누르면 종료됩니다.', ToastAndroid.SHORT);
+        
+        // 2초 안에 다시 안 누르면 초기화
+        setTimeout(() => {
+          setExitApp(false);
+        }, 2000);
+        
+        return true; // true를 반환하면 "앱 종료를 막음" (이벤트 가로채기 성공)
+      } else {
+        // 2초 안에 다시 눌렀으니 앱 종료!
+        BackHandler.exitApp(); 
+        return true;
+      }
+    };
+
+    // 이벤트 리스너 등록
+    const backHandler = BackHandler.addEventListener(
+      "hardwareBackPress",
+      backAction
+    );
+
+    // 컴포넌트가 사라질 때 리스너 제거 (필수!)
+    return () => backHandler.remove();
+  }, [exitApp]); // exitApp 상태가 바뀔 때마다 갱신
 
   const getKSTDateString = (isoString: string) => {
     if (!isoString) return "";

@@ -11,6 +11,7 @@
 import { useState, useEffect } from 'react';
 import { UserInfo } from '../types';
 import { useAuth } from './useAuth';
+import { supabase } from '../lib/supabase';
 // ❌ useDeepLink import 제거
 import { useUserProfile } from './useUserProfile';
 
@@ -49,12 +50,33 @@ export const useUserManagement = () => {
     return await profile.loadUserProfile();
   };
 
-  const loginWithEmail = async (email: string, password: string): Promise<boolean> => {
-    const success = await auth.loginWithEmail(email, password);
-    if (success) {
-      await profile.loadUserProfile();
+  const loginWithEmail = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+    setIsLoading(true);
+  
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+  
+      if (error) {
+        // 🚨 Alert 안 띄움! 대신 에러 메시지를 리턴해서 UI가 처리하게 함
+        return { success: false, error: "이메일 또는 비밀번호가 일치하지 않습니다." };
+      }
+  
+      // 성공 시 프로필 로드
+      if (profile && profile.loadUserProfile) {
+        await profile.loadUserProfile();
+      }
+  
+      return { success: true };
+  
+    } catch (e: any) {
+      console.error(e);
+      return { success: false, error: "알 수 없는 오류가 발생했습니다." };
+    } finally {
+      setIsLoading(false);
     }
-    return success;
   };
 
   const signUpWithEmail = async (

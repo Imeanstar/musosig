@@ -8,13 +8,14 @@ import { supabase } from '@/lib/supabase';
 
 // Hooks & Utils
 import { useUserManagement } from '../hooks/useUserManagement';
-// ❌ [삭제] useDeepLink, Linking import 제거 (이제 Layout이 함)
 
 // Components
 import { ManagerMain } from '../components/ManagerMain';
 import { AuthManager } from '../components/AuthManager';
 import { MemberPairing } from '../components/MemberPairing';
 import { MemberMain } from '../components/MemberMain';
+// ✅ [NEW] 권한 확인 컴포넌트 추가
+import { PermissionIntro } from '../components/PermissionIntro';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -32,8 +33,10 @@ export default function Index() {
   } = useUserManagement();
   
   const [currentView, setCurrentView] = useState<ViewState>('role_selection');
+  
+  // ✅ [NEW] 권한 체크 완료 여부 (기본값 false -> 아직 확인 안 함)
+  const [isPermissionChecked, setIsPermissionChecked] = useState(false);
 
-  // ✅ [단순화] 딥링크 체크 로직 삭제하고, 그냥 유저 정보만 로드합니다.
   useEffect(() => {
     loadUser();
   }, []);
@@ -54,7 +57,17 @@ export default function Index() {
     }
   };
 
-  // 🔄 로딩 중
+  // ✅ [NEW] 1. 앱 켜자마자 권한 체크 화면 먼저 보여주기
+  // (PermissionIntro 내부에서 이미 허용되어 있으면 자동으로 onAllGranted를 호출해 통과함)
+  if (!isPermissionChecked) {
+    return (
+      <PermissionIntro 
+        onAllGranted={() => setIsPermissionChecked(true)} 
+      />
+    );
+  }
+
+  // 🔄 2. 로딩 중
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
@@ -64,7 +77,7 @@ export default function Index() {
     );
   }
 
-  // ✅ 1. 로그인되어 있는데 전화번호가 없는 경우 (소셜 가입 마무리)
+  // ✅ 3. 로그인되어 있는데 전화번호가 없는 경우 (소셜 가입 마무리)
   if (userInfo && !userInfo.phone) {
     return (
       <AuthManager 
@@ -76,7 +89,7 @@ export default function Index() {
     );
   }
   
-  // ✅ 2. 메인 화면 진입
+  // ✅ 4. 메인 화면 진입 (로그인 완료 상태)
   if (userInfo) {
     if (userInfo.role === 'member') {
       return <MemberMain onBack={handleLogout} userInfo={userInfo!} />; 
@@ -85,7 +98,7 @@ export default function Index() {
   }
 
   // ---------------------------------------------------------
-  // 👇 여기서부터는 UI 렌더링 코드 (기존과 100% 동일)
+  // 👇 여기서부터는 로그인 전 화면 (Role Selection 등)
   // ---------------------------------------------------------
   
   if (currentView === 'role_selection') {
@@ -200,54 +213,57 @@ export default function Index() {
   return null;
 }
 
-// ... (registerAndSaveToken 등 유틸 함수들 그대로 유지) ...
+// ---------------------------------------------------------
+// Helper Functions (알림 토큰)
+// ---------------------------------------------------------
+
 async function registerAndSaveToken(userId: string) {
-    try {
-      const token = await registerForPushNotificationsAsync();
-      if (token) {
-        console.log("📢 알림 토큰 발급 완료:", token);
-        const { error } = await supabase
-          .from('users')
-          .update({ push_token: token })
-          .eq('id', userId);
-  
-        if (error) console.error("❌ 토큰 저장 실패:", error);
-      }
-    } catch (e) {
-      console.error("토큰 등록 에러:", e);
+  try {
+    const token = await registerForPushNotificationsAsync();
+    if (token) {
+      console.log("📢 알림 토큰 발급 완료:", token);
+      const { error } = await supabase
+        .from('users')
+        .update({ push_token: token })
+        .eq('id', userId);
+
+      if (error) console.error("❌ 토큰 저장 실패:", error);
     }
+  } catch (e) {
+    console.error("토큰 등록 에러:", e);
   }
-  
-  async function registerForPushNotificationsAsync() {
-    if (Platform.OS === 'web') return; 
-  
-    let token;
-    if (Platform.OS === 'android') {
-      await Notifications.setNotificationChannelAsync('default', {
-        name: '기본 알림',
-        importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#FF231F7C',
-      });
-    }
-  
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
-    if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
-    }
-    if (finalStatus !== 'granted') return;
-  
-    const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
-    try {
-      token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
-    } catch (e) {
-      console.error("토큰 발급 실패:", e);
-    }
-  
-    return token;
+}
+
+async function registerForPushNotificationsAsync() {
+  if (Platform.OS === 'web') return; 
+
+  let token;
+  if (Platform.OS === 'android') {
+    await Notifications.setNotificationChannelAsync('default', {
+      name: '기본 알림',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: '#FF231F7C',
+    });
   }
+
+  const { status: existingStatus } = await Notifications.getPermissionsAsync();
+  let finalStatus = existingStatus;
+  if (existingStatus !== 'granted') {
+    const { status } = await Notifications.requestPermissionsAsync();
+    finalStatus = status;
+  }
+  if (finalStatus !== 'granted') return;
+
+  const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
+  try {
+    token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+  } catch (e) {
+    console.error("토큰 발급 실패:", e);
+  }
+
+  return token;
+}
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff7ed' },
