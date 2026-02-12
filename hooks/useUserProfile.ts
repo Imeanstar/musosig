@@ -17,6 +17,7 @@ import {
 } from '../utils/storage';
 import { STORAGE_KEYS } from '../constants';
 import { registerForPushNotificationsAsync } from '../utils/notificationHelper';
+import { useUserContext } from '../contexts/UserContext';
 
 interface UseUserProfileReturn {
   userInfo: UserInfo | null;
@@ -30,107 +31,141 @@ interface UseUserProfileReturn {
 }
 
 export const useUserProfile = (): UseUserProfileReturn => {
-  const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
-  const [isProfileLoading, setIsProfileLoading] = useState(false);
+  const { userInfo, setUserInfo } = useUserContext();
+  
+  const [isProfileLoading, setIsProfileLoading] = useState(false); // 로딩은 지역 상태여도 됨
 
   /**
    * 사용자 프로필 로드 (DB + 로컬 스토리지)
    */
-  const loadUserProfile = async (): Promise<UserInfo | null> => {
-    try {
-      setIsProfileLoading(true);
+  // hooks/useUserProfile.ts 내부
 
-      // 1. 세션 확인
-      const { data: { session } } = await supabase.auth.getSession();
+const loadUserProfile = async (): Promise<UserInfo | null> => {
+  try {
+    setIsProfileLoading(true);
 
-      if (!session) {
-        console.log('[Profile] 세션 없음, 프로필 클리어');
-        await clearAllStorage();
-        setUserInfo(null);
-        return null;
-      }
+    // 1. 세션 확인
+    const { data: { session } } = await supabase.auth.getSession();
 
-      // 2. DB에서 프로필 조회 (중복 방지 로직 적용)
-      const { data: dbUser, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', session.user.id)
-        .limit(1)
-        .maybeSingle();
-
-      if (error) {
-        console.warn('[Profile] DB 조회 에러:', error.message);
-      }
-
-      // 데이터가 없거나 에러가 났을 때 -> 로컬 스토리지 폴백
-      if (!dbUser) {
-        console.warn('[Profile] DB 데이터 없음, 로컬 스토리지 폴백 시도');
-        
-        const localUser = await loadUserFromStorage();
-        if (localUser && localUser.id === session.user.id) {
-          setUserInfo(localUser);
-          return localUser;
-        }
-        return null;
-      }
-
-      // 3. 프리미엄 만료일 체크 로직
-      if (dbUser.is_premium && dbUser.premium_expiry_at) {
-        const now = new Date();
-        const expiryDate = new Date(dbUser.premium_expiry_at);
-
-        if (now > expiryDate) {
-          console.log('[Profile] 🚫 프리미엄 기간 만료됨! 등급을 내립니다.');
-          
-          await supabase
-            .from('users')
-            .update({ is_premium: false })
-            .eq('id', session.user.id);
-            
-          dbUser.is_premium = false; 
-        }
-      }
-
-      // 4. UserInfo 객체 생성
-      const user: UserInfo = {
-        id: dbUser.id,
-        role: dbUser.role,
-        name: dbUser.name, // DB 컬럼이 name인 경우
-        phone: dbUser.phone,
-        pairing_code: dbUser.pairing_code,
-        manager_id: dbUser.manager_id,
-        nickname: dbUser.nickname,
-        relation_tag: dbUser.relation_tag,
-        emergency_contacts: dbUser.emergency_contacts || [],
-        is_premium: dbUser.is_premium || false,
-        is_admin: dbUser.is_admin,
-        push_token: dbUser.push_token,
-        user_id: dbUser.id,
-        
-        last_seen_at: dbUser.last_seen_at,
-        settings: dbUser.settings,
-        
-        premium_started_at: dbUser.premium_started_at,
-        premium_expiry_at: dbUser.premium_expiry_at,
-      };
-
-      // 5. 로컬 스토리지 저장 및 상태 업데이트
-      await saveUserToStorage(user);
-      setUserInfo(user);
-
-      // 6. 푸시 토큰 등록
-      await registerPushToken(user);
-
-      return user;
-
-    } catch (error) {
-      console.error('[Profile] 로드 실패:', error);
+    if (!session) {
+      console.log('[Profile] 세션 없음, 프로필 클리어');
+      await clearAllStorage(); // 함수가 import 되어 있어야 함
       setUserInfo(null);
       return null;
-    } finally {
-      setIsProfileLoading(false);
     }
-  };
+
+    // 2. DB에서 내 기본 정보 조회
+    const { data: dbUser, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', session.user.id)
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      console.warn('[Profile] DB 조회 에러:', error.message);
+    }
+
+    // 데이터가 없거나 에러가 났을 때 -> 로컬 스토리지 폴백
+    if (!dbUser) {
+      console.warn('[Profile] DB 데이터 없음, 로컬 스토리지 폴백 시도');
+      
+      const localUser = await loadUserFromStorage(); // 함수 import 필요
+      if (localUser && localUser.id === session.user.id) {
+        setUserInfo(localUser);
+        return localUser;
+      }
+      return null;
+    }
+
+    // 3. [기존 유지] 프리미엄 만료일 체크 로직 (매니저 본인용)
+    // (만약 내가 매니저이고 기간이 지났다면, 여기서 DB를 업데이트해서 false로 만듦)
+    if (dbUser.is_premium && dbUser.premium_expiry_at) {
+      const now = new Date();
+      const expiryDate = new Date(dbUser.premium_expiry_at);
+
+      if (now > expiryDate) {
+        console.log('[Profile] 🚫 프리미엄 기간 만료됨! 등급을 내립니다.');
+        
+        await supabase
+          .from('users')
+          .update({ is_premium: false })
+          .eq('id', session.user.id);
+          
+        dbUser.is_premium = false; 
+      }
+    }
+
+    // -----------------------------------------------------------
+    // 🌟 [추가됨] 4. 진짜 프리미엄 상태 확인 (RPC 호출)
+    // (Member는 RLS 때문에 매니저 정보를 못 읽으므로, 이 함수가 대신 읽어옴)
+    // -----------------------------------------------------------
+    let finalPremiumStatus = dbUser.is_premium; // 기본값은 내 정보
+
+    // RPC 호출
+    const { data: rpcPremium, error: rpcError } = await supabase.rpc('get_my_premium_status');
+
+    console.log("🔍 프리미엄 체크 결과:", rpcPremium);
+    console.log("🚨 에러 있나요?:", rpcError);
+
+    if (!rpcError && rpcPremium !== null) {
+      // RPC가 성공하면 그 값을 '진짜 상태'로 사용
+      finalPremiumStatus = rpcPremium;
+    } else {
+       console.log("프리미엄 체크 RPC 실패(또는 null), 기존 값 유지:", rpcError?.message);
+    }
+    // -----------------------------------------------------------
+
+
+    // 5. UserInfo 객체 생성
+    const user: UserInfo = {
+      id: dbUser.id,
+      role: dbUser.role,
+      name: dbUser.name,
+      phone: dbUser.phone,
+      pairing_code: dbUser.pairing_code,
+      manager_id: dbUser.manager_id,
+      nickname: dbUser.nickname,
+      relation_tag: dbUser.relation_tag,
+      emergency_contacts: dbUser.emergency_contacts || [],
+      points: dbUser.points || 0,
+      is_safe_today: dbUser.is_safe_today || false,
+      last_proof_url: dbUser.last_proof_url || null,
+        
+      
+      // 🚨 [수정] 여기가 핵심입니다! RPC로 가져온 값을 우선 적용
+      is_premium: finalPremiumStatus || false, 
+      
+      is_admin: dbUser.is_admin,
+      push_token: dbUser.push_token,
+      user_id: dbUser.id,
+      
+      last_seen_at: dbUser.last_seen_at,
+      settings: dbUser.settings,
+      
+      premium_started_at: dbUser.premium_started_at,
+      premium_expiry_at: dbUser.premium_expiry_at,
+    };
+    console.log("🔥 최종 적용된 상태:", user.is_premium);
+    console.log("✅ 최종 User 객체의 프리미엄 값:", user.is_premium);
+
+    // 6. 로컬 스토리지 저장 및 상태 업데이트
+    await saveUserToStorage(user); // 함수 import 필요
+    setUserInfo(user);
+
+    // 7. 푸시 토큰 등록
+    await registerPushToken(user); // 함수 import 필요
+
+    return user;
+
+  } catch (error) {
+    console.error('[Profile] 로드 실패:', error);
+    setUserInfo(null);
+    return null;
+  } finally {
+    setIsProfileLoading(false);
+  }
+};
 
   /**
    * 푸시 토큰 등록/업데이트

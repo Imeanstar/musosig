@@ -50,18 +50,31 @@ export const useUserManagement = () => {
     return await profile.loadUserProfile();
   };
 
+  // useUserManagement.ts 내부
+
   const loginWithEmail = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     setIsLoading(true);
   
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      // ✅ 1. 여기서 공백 제거를 해야 진짜로 적용됩니다!
+      const cleanEmail = email.trim();
+      const cleanPassword = password.trim();
+
+      // ✅ 2. 디버깅용 로그 (이제 이게 터미널에 뜰 겁니다)
+      console.log(`[Facade 로그인 시도] 이메일: '${cleanEmail}', 비번길이: ${cleanPassword.length}`);
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
+        password: cleanPassword,
       });
   
       if (error) {
-        // 🚨 Alert 안 띄움! 대신 에러 메시지를 리턴해서 UI가 처리하게 함
+        console.error("Supabase 로그인 에러:", error.message); // 에러 로그 추가
         return { success: false, error: "이메일 또는 비밀번호가 일치하지 않습니다." };
+      }
+
+      if (!data.session) {
+         return { success: false, error: "세션 생성 실패" };
       }
   
       // 성공 시 프로필 로드
@@ -78,7 +91,6 @@ export const useUserManagement = () => {
       setIsLoading(false);
     }
   };
-
   const signUpWithEmail = async (
     email: string, 
     password: string, 

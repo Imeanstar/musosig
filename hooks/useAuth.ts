@@ -24,18 +24,45 @@ export const useAuth = (): UseAuthReturn => {
   const [isAuthLoading, setIsAuthLoading] = useState(false);
 
   // 1. 이메일 로그인 (기존 유지)
+  // useAuth 훅 내부
   const loginWithEmail = async (email: string, password: string): Promise<boolean> => {
     try {
       setIsAuthLoading(true);
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+      // ✅ 1. 공백 제거 (가장 중요!)
+      // 사용자가 실수로 넣은 앞뒤 공백을 싹둑 자릅니다.
+      const cleanEmail = email.trim(); 
+      const cleanPassword = password.trim(); // 비밀번호도 공백 제거 추천
+
+      // ✅ 2. 디버깅용 로그 (터미널에서 확인하세요)
+      console.log(`[로그인 시도] 이메일: '${cleanEmail}', 비밀번호길이: ${cleanPassword.length}`);
+
+      const { data, error } = await supabase.auth.signInWithPassword({ 
+        email: cleanEmail, 
+        password: cleanPassword 
+      });
       
-      if (error) throw error;
+      if (error) {
+        // ✅ 3. 정확한 에러 메시지 확인
+        console.error('[Supabase 에러 상세]', error.message); 
+        throw error;
+      }
+
       if (!data.session) throw new Error('세션 생성 실패');
       
       return true;
     } catch (e: any) {
       console.error('[Auth] 로그인 실패:', e);
-      Alert.alert('로그인 실패', '아이디와 비밀번호를 확인해주세요.');
+      
+      // 사용자에게 더 친절한 에러 메시지
+      let message = '아이디와 비밀번호를 확인해주세요.';
+      if (e.message.includes('Invalid login credentials')) {
+        message = '이메일 또는 비밀번호가 틀렸습니다.';
+      } else if (e.message.includes('Email not confirmed')) {
+        message = '이메일 인증이 완료되지 않았습니다.';
+      }
+
+      Alert.alert('로그인 실패', message);
       return false;
     } finally {
       setIsAuthLoading(false);

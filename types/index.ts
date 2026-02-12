@@ -21,6 +21,8 @@ export interface Profile {
   is_admin?: boolean;                 // 관리자 권한
   premium_started_at?: string | null; // 프리미엄 결제 시작일 (Timestamp)
   settings?: UserSettings | null;     // 개인 맞춤 설정 (JSON)
+  points?: number;
+  last_proof_url?: string | null; // 인증 사진
   
   // Member 전용 필드 (Manager는 null)
   pairing_code?: string | null;       // 6자리 페어링 코드

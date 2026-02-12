@@ -1,26 +1,29 @@
 /**
  * MemberMain.tsx
- * - 💎 [수정] UI 디자인 변경: 클린 그레이 글래스모피즘
- * - 배경을 다시 흰색/연회색으로 복귀
- * - 포인트 카드를 은은한 무채색 유리 질감으로 변경
+ * - 🔄 Context API 완벽 적용 (독립적인 Fetch 로직 제거)
+ * - 💎 클린 그레이 UI 유지
  */
 
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, Text, StyleSheet, TouchableOpacity, 
-  AppState, ActivityIndicator, Dimensions, Alert
+  AppState, ActivityIndicator, Dimensions
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-// 💎 [필수] 아이콘 추가 import 확인!
 import { 
   Heart, Calculator, Camera, Smartphone, CheckCircle, 
   RefreshCw, Settings, Phone, BookOpen, Coins, ChevronRight 
 } from 'lucide-react-native';
 import { supabase } from '../lib/supabase';
-import { UserInfo } from '../types';
 import { decode } from 'base64-arraybuffer';
 import * as FileSystem from 'expo-file-system';
+
+// ✅ Context 가져오기 (가장 중요!)
+import { useUserManagement } from '../hooks/useUserManagement'; 
+// 또는 useUserContext를 직접 써도 되지만, 기존 hook이 감싸고 있다면 그걸 쓰는 게 좋습니다.
+// 만약 useUserManagement가 Context를 쓰게 수정되었다면 위 import 유지.
+// 아니라면: import { useUserContext } from '../contexts/UserContext'; 
 
 // Hooks
 import { useMathChallenge } from '../hooks/useMathChallenge';
@@ -37,16 +40,19 @@ import CustomAlertModal from './modals/CustomAlertModal';
 import { StoreModal } from './modals/StoreModal';
 
 interface MemberMainProps {
-  userInfo: UserInfo;
+  // userInfo는 이제 Props로 안 받아도 됨 (Context에서 가져옴)
   onBack: () => void;
 }
 
-export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProps) {
+export function MemberMain({ onBack }: MemberMainProps) {
   const insets = useSafeAreaInsets();
   
-  // 상태 관리
-  const [userInfo, setUserInfo] = useState<UserInfo>(initialUserInfo);
-  const [points, setPoints] = useState(0);
+  // ✅ 전역 상태 사용 (여기서 userInfo를 가져옵니다)
+  // (만약 useUserManagement가 Context를 쓰도록 수정 안 됐다면 useUserContext() 사용)
+  const { userInfo, loadUser } = useUserManagement(); 
+
+  // 로컬 UI 상태
+  const [points, setPoints] = useState(userInfo?.points || 0); // 초기값
   const [isLoading, setIsLoading] = useState(false);
   
   // 모달 상태들
@@ -64,6 +70,11 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
   const camera = useCameraCapture();
   const [isShakeModalOpen, setIsShakeModalOpen] = useState(false);
 
+  // userInfo가 없을 때 방어 코드
+  if (!userInfo) {
+      return <View style={styles.container}><ActivityIndicator /></View>;
+  }
+
   // ✅ 오늘 안부 완료 여부 체크
   const isDoneToday = (() => {
     if (!userInfo.is_safe_today) return false; 
@@ -73,46 +84,31 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
     return lastDate === todayDate; 
   })();
 
-  // 🔄 최신 정보 불러오기
-  const fetchLatestData = async () => {
+  // 🔄 데이터 갱신 (이제 Context의 loadUser를 씁니다)
+  const handleRefresh = async () => {
     try {
-      const { data: myData, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', userInfo.id)
-        .single();
-
-      if (error || !myData) return;
-
-      let isManagerPremium = false;
-      if (myData.manager_id) {
-        const { data: managerData } = await supabase
-          .from('users')
-          .select('is_premium')
-          .eq('id', myData.manager_id)
-          .single();
-        isManagerPremium = managerData?.is_premium || false;
-      }
-
-      setUserInfo({
-        ...myData,
-        is_premium: myData.is_premium || isManagerPremium
-      });
-
-      setPoints(myData.points || 0);
-      console.log('🔄 데이터 갱신 완료. 현재 포인트:', myData.points);
+        setIsLoading(true);
+        // loadUser 내부에서 이미 RPC 호출 등 모든 처리가 다 되어 있음!
+        const updatedUser = await loadUser(); 
+        if (updatedUser) {
+            setPoints(updatedUser.points || 0);
+        }
     } catch (e) {
-      console.error("데이터 갱신 실패:", e);
+        console.error(e);
+    } finally {
+        setIsLoading(false);
     }
   };
 
   // ⚡️ 앱 활성화 시 자동 갱신
   const appState = useRef(AppState.currentState);
   useEffect(() => {
-    fetchLatestData();
+    // 처음 켜질 때 포인트 동기화
+    setPoints(userInfo.points || 0);
+    
     const subscription = AppState.addEventListener('change', nextAppState => {
       if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
-        fetchLatestData();
+        handleRefresh();
       }
       appState.current = nextAppState;
     });
@@ -179,9 +175,8 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
         });
       }
 
-      // 4. 화면 갱신
-      setUserInfo(prev => ({ ...prev, last_seen_at: nowISO, is_safe_today: true }));
-      setPoints(prev => prev + EARN_AMOUNT);
+      // 4. 화면 갱신 (Context 업데이트 호출)
+      await handleRefresh(); 
 
       if (camera.isVisible) camera.close();
       if (showBible) setShowBible(false); 
@@ -247,9 +242,6 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
   return (
     <View style={styles.container}>
       
-      {/* 💎 [수정] 배경 그라디언트 제거 -> 단색 배경으로 복귀 */}
-      {/* <LinearGradient ... /> 제거됨 */}
-
       {/* 상단 바 */}
       <View style={[styles.topBar, { paddingTop: insets.top + 20 }]}>
         <View>
@@ -263,29 +255,25 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
 
       <View style={styles.content}>
         
-        {/* 💎 [수정] 클린 그레이 글래스모피즘 포인트 카드 */}
+        {/* 포인트 카드 */}
         <View style={styles.glassCardContainer}>
           <LinearGradient
-            // 흰색 -> 아주 연한 회색 그라디언트로 은은한 유리 느낌
             colors={['rgba(255,255,255,0.95)', 'rgba(243,244,246,0.9)']}
             style={styles.glassCard}
             start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }}
           >
             <View style={styles.pointRow}>
-              {/* 아이콘 배경을 연한 회색으로 변경하여 차분하게 */}
               <View style={styles.coinCircle}>
                 <Coins size={24} color="#d97706" fill="#fbbf24" />
               </View>
               <View>
                 <Text style={styles.pointLabel}>내 포인트</Text>
-                {/* 숫자만 주황색으로 강조 */}
                 <Text style={styles.pointValue}>{points.toLocaleString()} P</Text>
               </View>
             </View>
-            {/* 상점 버튼도 무채색 베이스에 주황색 포인트 */}
             <TouchableOpacity 
               style={styles.shopBtn} 
-              onPress={() => setShowStore(true)} // 👈 여기 수정
+              onPress={() => setShowStore(true)}
             >
               <Text style={styles.shopBtnText}>상점 가기</Text>
               <ChevronRight size={16} color="#15803d" />
@@ -328,10 +316,10 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
           </Text>
         </View>
 
-        {/* 하단 카드 (기존 디자인 유지) */}
+        {/* 하단 카드 */}
         <View style={[styles.footer, { paddingBottom: insets.bottom + 20 }]}>
           <View style={styles.bottomRow}>
-            <TouchableOpacity style={styles.halfCard} onPress={fetchLatestData} activeOpacity={0.7}>
+            <TouchableOpacity style={styles.halfCard} onPress={handleRefresh} activeOpacity={0.7}>
               <View style={styles.cardHeader}>
                 <RefreshCw size={14} color="#9ca3af" />
                 <Text style={styles.cardLabel}>마지막 안부</Text>
@@ -400,7 +388,7 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
         onComplete={() => { setIsShakeModalOpen(false); completeCheckIn(null, '흔들어서 안부'); }}
       />
       <MemberSettingsModal 
-        visible={showSettings} onClose={() => { setShowSettings(false); fetchLatestData(); }}
+        visible={showSettings} onClose={() => { setShowSettings(false); handleRefresh(); }}
         onLogout={() => { setShowSettings(false); onBack(); }} isPremium={!!userInfo.is_premium}
       />
       <FakeCallModal visible={showFakeCall} onClose={() => setShowFakeCall(false)} />
@@ -408,8 +396,8 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
       <CustomAlertModal
         visible={successModalVisible} title="안부 전송 완료! 🚀" message={successMessage}
         confirmText="확인" type="default" 
-        onClose={() => { setSuccessModalVisible(false); fetchLatestData(); }}
-        onConfirm={() => { setSuccessModalVisible(false); fetchLatestData(); }}
+        onClose={() => { setSuccessModalVisible(false); handleRefresh(); }}
+        onConfirm={() => { setSuccessModalVisible(false); handleRefresh(); }}
       />
       <CustomAlertModal
         visible={errorModalVisible} title="알림" message={errorMessage}
@@ -421,24 +409,20 @@ export function MemberMain({ userInfo: initialUserInfo, onBack }: MemberMainProp
         onClose={() => setShowStore(false)}
         myPoints={points}
         onPurchaseComplete={() => {
-          fetchLatestData(); // 포인트 갱신
-          // 필요하면 구매 성공 축하 모달 띄우기 가능
+          handleRefresh(); // 포인트 갱신
         }}
       />
     </View>
   );
 }
 
+// 스타일은 그대로 유지 (변경 없음)
 const styles = StyleSheet.create({
-  // 💎 [수정] 배경색 복귀
   container: { flex: 1, backgroundColor: '#f9fafb' },
-  
-  // 💎 [수정] 클린 그레이 글래스모피즘 스타일
   glassCardContainer: { marginTop: 10, marginBottom: 20 },
   glassCard: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     padding: 20, borderRadius: 24,
-    // 아주 얇은 회색 테두리와 은은한 그림자
     borderWidth: 1, borderColor: 'rgba(229, 231, 235, 0.5)', 
     shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.05, shadowRadius: 12, elevation: 2,
@@ -446,25 +430,21 @@ const styles = StyleSheet.create({
   pointRow: { flexDirection: 'row', alignItems: 'center' },
   coinCircle: {
     width: 48, height: 48, borderRadius: 24,
-    backgroundColor: '#f3f4f6', // 연한 회색 배경
+    backgroundColor: '#f3f4f6', 
     justifyContent: 'center', alignItems: 'center', marginRight: 14,
   },
-  // MemberMain.tsx의 styles 부분 수정
-
-  pointLabel: { fontSize: 13, color: '#166534', fontWeight: '600', marginBottom: 2 }, // 🌲 진한 녹색 라벨
-  pointValue: { fontSize: 22, fontWeight: 'bold', color: '#15803d' }, // 🌲 메인 녹색 강조 숫자
-  
+  pointLabel: { fontSize: 13, color: '#166534', fontWeight: '600', marginBottom: 2 }, 
+  pointValue: { fontSize: 22, fontWeight: 'bold', color: '#15803d' }, 
   shopBtn: {
     flexDirection: 'row', alignItems: 'center', 
-    backgroundColor: '#f0fdf4', // 🌲 아주 연한 녹색 버튼 배경
+    backgroundColor: '#f0fdf4', 
     paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20,
-    borderWidth: 1, borderColor: '#dcfce7' // 🌲 연한 테두리 추가로 디테일 살리기
+    borderWidth: 1, borderColor: '#dcfce7' 
   },
-  shopBtnText: { fontSize: 13, color: '#15803d', fontWeight: '600', marginRight: 4 }, // 🌲 메인 녹색 텍스트
+  shopBtnText: { fontSize: 13, color: '#15803d', fontWeight: '600', marginRight: 4 }, 
 
-  // 기존 스타일
   topBar: { 
-    backgroundColor: 'transparent', // 배경색 투명으로 (뒤에 배경색이 보이게)
+    backgroundColor: 'transparent',
     paddingHorizontal: 24, paddingBottom: 20, 
     zIndex: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' 
   },
@@ -481,7 +461,6 @@ const styles = StyleSheet.create({
   centerArea: { alignItems: 'center', justifyContent: 'center', flex: 1 },
   mainButtonContainer: { width: 200, height: 200, justifyContent: 'center', alignItems: 'center', marginBottom: 24, position: 'relative' },
   mainButton: { width: 180, height: 180, borderRadius: 90, justifyContent: 'center', alignItems: 'center', elevation: 5, shadowColor: '#000000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, zIndex: 2 },
-  pulseRing: { position: 'absolute', width: 220, height: 220, borderRadius: 110, borderWidth: 2, borderColor: '#fca5a5', opacity: 0.5, zIndex: 1 },
   actionLabel: { fontSize: 28, fontWeight: 'bold', color: '#111827', marginBottom: 8 },
   actionSubLabel: { fontSize: 16, color: '#6b7280' },
   footer: {},
